@@ -4,10 +4,6 @@ extern printf
 
 section .data
     fmt db "%f", 10, 0
-    float_const_0 dd 10.500000
-
-    float_const_1 dd 5.000000
-
 
 section .text
 global main
@@ -15,26 +11,60 @@ global main
 main:
     push rbp
     mov rbp, rsp
-    sub rsp, 4
-    
-    ; a's expression
-    movss xmm0, [rel float_const_0]
     sub rsp, 8
-    movss [rsp], xmm0
-    movss xmm0, [rel float_const_1]
-    movss xmm1, [rsp]
-    add rsp, 8
-    addss xmm0, xmm1
     
-    ; a saved in stack
-    movss dword [rbp - 36], xmm0
+    ; i's expression
+    mov eax, 0
     
-
-    movss    xmm0, dword [rbp - 4]
-    cvtss2sd xmm1, xmm0            ; printf takes doubles, so float32 must be widened
-    movq     rdx, xmm1             ; variadic: the double goes in BOTH xmm1 and rdx
-    lea      rcx, [rel fmt]        ; arg 1 = format string
-    call     printf    
+    ; i saved in stack
+    mov dword [rbp - 36], eax
+    
+    ; (0) while expression
+    mov eax, [rbp - 36]
+    push rax
+    mov eax, 10
+    mov rcx, rax
+    pop rax
+    cmp eax, ecx
+    setl al
+    ; (0) while comparison and jumping
+    cmp al, 1
+    je while_body_0
+    jmp while_end_0
+    
+while_body_0:
+    ; (0) while body
+    ; i reassignment expression
+    mov eax, [rbp - 36]
+    push rax
+    mov eax, 1
+    mov rcx, rax
+    pop rax
+    add eax, ecx
+    ; i reassign to stack
+    mov dword [rbp - 36], eax
+    ; (0) while loopback check expression
+    mov eax, [rbp - 36]
+    push rax
+    mov eax, 10
+    mov rcx, rax
+    pop rax
+    cmp eax, ecx
+    setl al
+    ; (0) while loopback check action
+    cmp al, 1
+    je while_body_0
+    jmp while_end_0
+    
+while_end_0:
+    ; (0) while end
+    ; output's expression
+    mov eax, [rbp - 36]
+    
+    ; output saved in stack
+    mov dword [rbp - 40], eax
+    
+    
     mov  rsp, rbp
     pop rbp
     ret

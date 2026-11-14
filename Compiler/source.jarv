@@ -1,1 +1,5 @@
-float a = 10.5f + 5.0f;
+int i = 0;
+while(i < 10){
+    i = i + 1;
+}
+int output = i;
