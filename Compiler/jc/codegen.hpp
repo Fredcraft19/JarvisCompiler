@@ -17,6 +17,8 @@ private:
     static inline std::string text;
     static inline bool tabbed;
 
+    static inline uint32_t labelCount;
+
     static inline bool logs;
 
     static void print(std::string x){
@@ -27,6 +29,10 @@ private:
     template <typename T>
     static std::string str(T x){
         return std::to_string(x);
+    }
+
+    static uint32_t getLabelId(){
+        return labelCount++;
     }
 
     static void emit(std::string _nasm){
@@ -55,6 +61,97 @@ private:
         emit("add rsp, 8");
     }
 
+    static void generateVarReassignment(variableResNode* res){
+        emit("; " + res->name + " reassignment expression");
+        generateExpression(res->expression.get(), true);
+        // the efficiency is.. amazing..
+        // (std::string cmd = float ? "movss" : "mov")
+        // i just cant be asked.. sorry...
+
+        emit("; " + res->name + " reassign to stack");
+
+        if(res->type.dataType == variableType::Float){
+            emit("movss " + abstr::getDataType(res->type.totalBytes) + " [rbp - " + str(res->type.address) + "], " + abstr::getRegister(res->type, true));
+        }
+        else if (res->type.dataType == variableType::Int || res->type.dataType == variableType::Uint) {
+            emit("mov " + abstr::getDataType(res->type.totalBytes) + " [rbp - " + str(res->type.address) + "], " + abstr::getRegister(res->type, true));
+        }
+    }
+
+    static void generateBody(std::vector<std::unique_ptr<node>>& body){
+        for(auto& Node: body){
+            generateNode(Node.get());
+        }
+    }
+
+    // generates if statement.
+    static void generateIf(ifNode* If){
+        std::string id = str(getLabelId());
+        std::string bodyName = "if_body_"+id;
+        std::string elseName = "if_else_"+id;
+        std::string endName = "if_end_"+id;
+
+        emit("; ("+id+") if expression" );
+        generateExpression(If->condition.get(), true);
+
+        emit("; ("+id+") if comparison and jumping" );
+        emit("cmp al, 1");
+        emit("je " + bodyName);
+        emit("jmp " + elseName);
+
+        emit(""); /// nicer looking spacing for easier readability
+
+        label(bodyName);
+        emit("; ("+id+") if body" );
+
+        generateBody(If->body);
+
+        emit("jmp " + endName);
+        emit("");
+        label(elseName);
+        emit("; ("+id+") if else" );
+
+        generateBody(If->elseBody);
+
+        emit(""); // nice spacing
+
+        label(endName);
+        emit("; ("+id+") if end" );
+    }
+
+    static void generateWhile(whileNode* While){
+        std::string id = str(getLabelId());
+        std::string bodyName = "while_body_"+id;
+        std::string endName = "while_end_"+id;
+
+        emit("; ("+id+") while expression" );
+        generateExpression(While->condition.get(), true);
+
+        emit("; ("+id+") while comparison and jumping" );
+        emit("cmp al, 1");
+        emit("je " + bodyName);
+        emit("jmp " + endName);
+
+        emit(""); /// nicer looking spacing for easier readability
+
+        label(bodyName);
+        emit("; ("+id+") while body" );
+
+        generateBody(While->body);
+
+        emit("; ("+id+") while loopback check expression" );
+        generateExpression(While->condition.get(), true);
+        emit("; ("+id+") while loopback check action" );
+        emit("cmp al, 1");
+        emit("je " + bodyName);
+        emit("jmp " + endName);
+
+        emit(""); // nice spacing
+
+        label(endName);
+        emit("; ("+id+") while end" );
+
+    }
 
     // isPrimary determins if it should prefer the primary or secondary register of its type
     // for example:
@@ -88,47 +185,36 @@ private:
         else if (auto* bin = dynamic_cast<binaryExpresssionNode*>(expr)) {
             print("    binary node");
             auto* l = bin->left.get();
+            auto& t = l->resolvedType;
+            bool isFloat = t.dataType == variableType::Float;
 
-            // evaluate left expression (result lands in eax/rax)
             generateExpression(bin->left.get(), true);
-            
-            // save left result onto the stack
-            if(l->resolvedType.dataType == variableType::Float){
-                pushFloat(true);
-            }
-            else emit("push " + abstr::getRegister(l->resolvedType, true, false));
-            
-            // evaluate right expression (result lands in eax/rax)
+            if(isFloat) pushFloat(true);
+            else emit("push " + abstr::getRegister(t, true, false));
+
             generateExpression(bin->right.get(), true);
 
-            if(bin->oper == "/"){
-                emit(abstr::handleDivFlip(bin->left->resolvedType));
-                if(l->resolvedType.dataType == variableType::Float){
-                    popFloat(true);
-                }else{
-                emit("pop " + abstr::getRegister(l->resolvedType, true, false));}
+            // right -> secondary, left -> primary
+            if(isFloat){
+                emit("movaps xmm1, xmm0");
+                popFloat(true);
             }
             else{
-                if(l->resolvedType.dataType == variableType::Float){
-                    popFloat(false);
-                }else{
-                emit("pop " + abstr::getRegister(l->resolvedType, false, false));}
+                emit("mov rcx, rax");
+                emit("pop rax");
             }
-            
-            // pop the saved left result into rcx/ecx
-            
 
-            std::string regPrimary = abstr::getRegister(l->resolvedType, true);     // eax
-            std::string regSecondary = abstr::getRegister(l->resolvedType, false);   // ecx
+            std::string regPrimary = abstr::getRegister(l->resolvedType, true);
+            std::string regSecondary = abstr::getRegister(l->resolvedType, false);
 
             std::string operation = abstr::handleFullOperation(bin->oper, l->resolvedType);
 
-            if(operation !=  ""){
+            if(operation != ""){
                 emit(operation);
             }
             else if (bin->oper == "/") {
-                emit(abstr::handleDivision(l->resolvedType, l->resolvedType.address, bin->right->resolvedType.address));    
-            } 
+                emit(abstr::handleDivision(l->resolvedType, l->resolvedType.address, bin->right->resolvedType.address));
+            }
             else {
                 throw std::runtime_error("codegen: unsupported binary operator '" + bin->oper + "'");
             }
@@ -193,12 +279,12 @@ private:
 
     static void generateEnd(){
         tabbed = true;
-        text += R"(
-    movss    xmm0, dword [rbp - 4]
-    cvtss2sd xmm1, xmm0            ; printf takes doubles, so float32 must be widened
-    movq     rdx, xmm1             ; variadic: the double goes in BOTH xmm1 and rdx
-    lea      rcx, [rel fmt]        ; arg 1 = format string
-    call     printf)";
+    //text += R"(
+    //movss    xmm0, dword [rbp - 4]
+    //cvtss2sd xmm1, xmm0            ; printf takes doubles, so float32 must be widened
+    //movq     rdx, xmm1             ; variadic: the double goes in BOTH xmm1 and rdx
+    //lea      rcx, [rel fmt]        ; arg 1 = format string
+    //call     printf)";
         emit("");
         emit("mov  rsp, rbp");
         emit("pop rbp");
@@ -208,6 +294,18 @@ private:
     static void generateNode(node* node){
         if(auto* varDecl = dynamic_cast<variableDeclNode*>(node)){
             generateVariableDecl(varDecl);
+            return;
+        }
+        else if(auto* resVar = dynamic_cast<variableResNode*>(node)){
+            generateVarReassignment(resVar);
+            return;
+        }
+        else if(auto* If = dynamic_cast<ifNode*>(node)){
+            generateIf(If);
+            return;
+        }
+        else if(auto* While = dynamic_cast<whileNode*>(node)){
+            generateWhile(While);
             return;
         }
         else{
@@ -222,6 +320,7 @@ public:
         data_.clear();
         text.clear();
 
+        labelCount = 0;
 
         logs = log;   
 

@@ -21,39 +21,62 @@ private:
         switch(data.totalBytes){
             case 4: suffix = "ss"; break;
             case 8: suffix = "sd"; break;
-            default: throw std::runtime_error("abstract codegen: unsupported float size");
+            default: return "";
         }
         if(oper == "+") return "add" + suffix;
         if(oper == "-") return "sub" + suffix;
         if(oper == "*") return "mul" + suffix;
-        throw std::runtime_error("abstract codegen: unsupported float operator " + oper);
+
+        if(data::isBoolOperator(oper)) throw std::runtime_error("abstract codegen: boolean arithmetic and comparison is not supported for floats yet.");
+        return "";
     }
 
-    static std::string getIntOperator(std::string& oper, variableData&){
+    static std::string getIntOperator(std::string& oper, variableData& data){
         if(oper == "+") return "add";
         if(oper == "-") return "sub";
         if(oper == "*") return "imul";
-        throw std::runtime_error("abstract codegen: unsupported int operator " + oper);
+
+        if(data::isBoolOperator(oper)) return "cmp";
+        return "";
     }
 
-    static std::string getUintOperator(std::string& oper, variableData&){
+    static std::string getUintOperator(std::string& oper, variableData& data){
         if(oper == "+") return "add";
         if(oper == "-") return "sub";
-        if(oper == "*") return "imul";   // low bits are identical to mul, and imul has a 2-operand form
-        throw std::runtime_error("abstract codegen: unsupported uint operator " + oper);
+        if(oper == "*") return "imul";
+
+        if(data::isBoolOperator(oper)) return "cmp";
+        return "";
     }
 
 public:
 
+    static std::string getBooleanOperater(std::string& oper, variableData& type){
+        if(data::assemblyBoolOperators.find(oper) != data::assemblyBoolOperators.end()){
+            return data::assemblyBoolOperators[oper];
+        }
+        else{
+            throw std::runtime_error("abstract codegen: unexpected operator when running 'getBooleanOperator' -> '" + oper + "'.");
+        }
+    }
+
     static std::string handleFullOperation(std::string& oper, variableData& type){
         std::string output = "";
         output += handleOperation(oper, type, true);
-        
-        output += " " + getRegister(type, true) + ", ";
-        output += getRegister(type, false);
+
+        if(output == "cmp"){
+            output += " " + getRegister(type, true) + ", "; 
+            output += getRegister(type, false) + "\n    ";
+
+            output += getBooleanOperater(oper, type);
+            output += " al";
+        }
+        else if(output != ""){
+            output += " " + getRegister(type, true) + ", ";
+            output += getRegister(type, false);
+        }
 
         return output;
-
     }
     
     static std::string getDataType(size_t bytes){
@@ -219,24 +242,9 @@ public:
         }
     }
 
-    //static std::string getFloat(size_t bytes, double value){
-    //    if(bytes == 2){
-    //        throw std::runtime_error("abstract codegen: float16's are not supported");
-    //    }
-    //    else if(bytes == 4){
-    //        return "__float32__(" + std::to_string(value) + ")";
-    //    }
-    //    else if(bytes == 8){
-    //        return "__float64__(" + std::to_string(value) + ")";
-    //    }
-    //    
-    //    throw std::runtime_error("abstract codegen: invalid bytes for 'getFloat'. only supports 4 and 8 bytes (32-64bit floating point values) selected was: " + std::to_string(bytes) + " or " + std::to_string(bytes * 8) + "bits");
-    //}
-
     // Is Primary determins if its the primary or secondary register (eg: rax and rcx)
     // is Normal determins if the register is used for push/pop (not normal) or if its used normally, if its used abnormally then it will use rax and rcx for stack push/pops
     static std::string getRegister(variableData& data, bool isPrimary = true, bool isNormal = true){
-
 
         if(data.dataType == variableType::Float) return isPrimary ? "xmm0" : "xmm1";
 

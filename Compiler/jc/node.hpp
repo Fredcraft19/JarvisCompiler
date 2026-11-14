@@ -83,3 +83,20 @@ struct variableDeclNode : public node{
 
     std::unique_ptr<expressionNode> expression;
 };
+
+struct variableResNode : public node{
+    std::string name;
+    std::unique_ptr<expressionNode> expression;
+    variableData type;
+};
+
+struct ifNode : public node {
+    std::unique_ptr<expressionNode> condition;
+    std::vector<std::unique_ptr<node>> body;
+    std::vector<std::unique_ptr<node>> elseBody;
+};
+
+struct whileNode : public node{
+    std::unique_ptr<expressionNode> condition;
+    std::vector<std::unique_ptr<node>> body;
+};

@@ -52,11 +52,18 @@ private:
         else if(std::find(data::keywords.begin(), data::keywords.end(), word) != data::keywords.end()){
             add(tokenType::keyword, word);
         }
+        else if(word == "true" || word == "false"){
+            add(tokenType::integer, word == "true" ? "1" : "0");
+        }
         else{
             add(tokenType::identifyer, word);
         }
     }
+
 public:
+    static token& last(){
+        return toks[toks.size()-1];
+    }
 
     // tokenises source code into tokens for the parser
     static std::vector<token> tokenise(std::string& source, bool log = false){
@@ -85,18 +92,31 @@ public:
                     
                 case '=':
                     flush();
-                    add(tokenType::equals, "=");
+                    if(last().type == tokenType::oper || last().type == tokenType::equals){
+                        last().value += "=";
+                        last().type = tokenType::oper;
+                    }
+                    else{
+                        add(tokenType::equals, "=");
+                    }
                     break;
-
+                    
+                case '!':
+                case '<':
+                case '>':
                 case '+':
                 case '-':
                 case '*':
                 case '/':
                     flush();
-                    add(tokenType::oper, std::string(1, ch));
+                    if(last().type == tokenType::oper || last().type == tokenType::equals){
+                        last().value += std::string(1, ch);
+                    }
+                    else{
+                        add(tokenType::oper, std::string(1, ch));
+                    }
                     break;
                     
-
                 case '(':
                     flush();
                     add(tokenType::open_bracket, std::string(1, ch));
@@ -104,6 +124,15 @@ public:
                 case ')':
                     flush();
                     add(tokenType::close_bracket, std::string(0, ch));
+                    break;
+
+                case '{':
+                    flush();
+                    add(tokenType::open_curly, std::string(1, ch));
+                    break;
+                case '}':
+                    flush();
+                    add(tokenType::close_curly, std::string(0, ch));
                     break;
 
 

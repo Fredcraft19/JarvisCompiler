@@ -10,6 +10,7 @@ enum variableType{
     Uint,
     Float,
 
+    Bool,
     Void,
 
     Error
@@ -40,8 +41,39 @@ class data{
 public:
 
     static inline std::vector<std::string> keywords = {
-        
+        "if",
+        "else",
+        "while"
     };
+
+    static inline std::vector<std::string> boolOperators = {
+        "==",
+        "!=",
+        "<",
+        "<=",
+        ">",
+        ">="
+    };
+
+    // i know i can just refit the vector above for this purpose but i really cant be asked
+    // to re-write like 5 lines of code.
+    static inline std::unordered_map<std::string, std::string> assemblyBoolOperators = {
+        {"==",   "sete"},
+        {"!=",   "setne"},
+        {"<",    "setl"},
+        {"<=",   "setle"},
+        {">",    "setg"},
+        {">=",   "setge"}
+    };
+
+    static inline bool isBoolOperator(std::string& oper){
+        for(auto& o : boolOperators){
+            if(oper == o){
+                return true;
+            }
+        }
+        return false;
+    }
 
     static inline std::unordered_map<std::string, variableData> primatives = {
         {"int8",        variableData(1,Int)},
@@ -62,6 +94,8 @@ public:
         {"uint",        variableData(4, Uint)},
         {"float",       variableData(4, Float)},
 
+
+        {"bool",        variableData(1, Int)},
         
         {"void",        variableData(0, Void)}
     };

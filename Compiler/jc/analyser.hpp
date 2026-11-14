@@ -131,9 +131,49 @@ private:
         }
     }
 
+    static void analyseVarRes(variableResNode* res){
+        if(!checkInScope(res->name)) throw std::runtime_error("analyser: variable '" + res->name + "' does not exist in scope");
+        auto dat = findInScope(res->name);
+        auto exprDat = analyseExpression(res->expression, dat.dataType == variableType::Uint);
+        if(dat.dataType != exprDat.dataType){
+            throw std::runtime_error("analyser: cannot reassign a variable ('" +res->name+ "') a different type");
+        }
+        res->type = dat;
+    }
+
+    static void analyseBody(std::vector<std::unique_ptr<node>>& body){
+        pushScope();
+        for(auto& Node : body){
+            analyseNode(Node.get());
+        }
+        popScope();
+    }
+
+    static void analyseIfStatement(ifNode* If){
+        analyseExpression(If->condition);
+
+        analyseBody(If->body);
+        analyseBody(If->elseBody);
+
+    }
+
+    static void analyseWhileStatement(whileNode* While){
+        analyseExpression(While->condition);
+        analyseBody(While->body);
+    }
+
     static void analyseNode(node* node){
         if(auto* varDecl = dynamic_cast<variableDeclNode*>(node)){
             analyseVarDecl(varDecl);
+        }
+        else if(auto* resVar = dynamic_cast<variableResNode*>(node)){
+            analyseVarRes(resVar);
+        }
+        else if(auto* whileStatement = dynamic_cast<whileNode*>(node)){
+            analyseWhileStatement(whileStatement);
+        }
+        else if(auto* ifStatement = dynamic_cast<ifNode*>(node)){
+            analyseIfStatement(ifStatement);
         }
         else{
             throw std::runtime_error("analyser: unexpected node to be analysed");
