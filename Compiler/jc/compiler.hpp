@@ -39,30 +39,49 @@ public:
     // source code in one simple method.
     // returns assembly (86x_64 NASM)
     static std::string compile_to_nasm(std::string source, bool log = false){
+        using clock = std::chrono::steady_clock;
 
-        auto start = std::chrono::high_resolution_clock::now();
+        using us = std::chrono::duration<double, std::micro>;
+
+        auto t0 = clock::now();
 
         if(log) std::cout << "Tokenising\n";
         auto tokens = tok::tokenise(source, log);
+        auto t1 = clock::now();
 
-        if(log){ for(int i = 0; i < tokens.size(); i++){
+        if(log){ for(size_t i = 0; i < tokens.size(); i++){
             std::cout << tokens[i].string() << "\n";
         }}
 
-        //std::string x;
-        //std::cin >> x;
-
         if(log) std::cout << "Parsing\n";
+        auto t2 = clock::now();
         auto nodes = parser::parse(tokens, log);
+        auto t3 = clock::now();
 
         if(log) std::cout << "Analysing\n";
-        size_t stackSize = analyser::analyse(nodes, log);
-        if(log) std::cout << "Generating Code\n";
-        std::string assembly = codegen::generate(nodes, stackSize, log);
+        auto t4 = clock::now();
+        auto& method_data = analyser::analyse(nodes, log);
+        auto t5 = clock::now();
 
-        auto end = std::chrono::high_resolution_clock::now();
-        std::chrono::duration<double, std::milli> duration = end - start;
-        std::cout << "Compiled in " << std::round(duration.count()*1000.0f) / 1000.0f << "ms\n";
+        if(log) std::cout << "Generating Code\n";
+        auto t6 = clock::now();
+        std::string assembly = codegen::generate(nodes, method_data, log);
+        auto t7 = clock::now();
+
+        double tokenTime    = us(t1 - t0).count();
+        double parseTime    = us(t3 - t2).count();
+        double analyseTime  = us(t5 - t4).count();
+        double codegenTime  = us(t7 - t6).count();
+        double total = tokenTime + parseTime + analyseTime + codegenTime;
+
+        auto fmt = [](double v){ return std::round(v * 1000.0) / 1000.0; };
+
+        std::cout << "Tokenising: "         << fmt(tokenTime)   << "us\n"
+                << "Parsing: "            << fmt(parseTime)   << "us\n"
+                << "Analysation: "        << fmt(analyseTime) << "us\n"
+                << "Code Generation: "    << fmt(codegenTime) << "us\n"
+                << "Total Compilation: "  << fmt(total)       << "us\n";
+
         return assembly;
     }
 

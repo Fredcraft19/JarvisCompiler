@@ -266,7 +266,7 @@ public:
         if(from.totalBytes > to.totalBytes) return "";
 
         std::string target = getRegister(to, true); // to true!! hahaha.. that joke is to true.. haha..
-        std::string original = getRegister(from, false);
+        std::string original = getRegister(from, true);
 
         if(type == variableType::Int){
             if(from.totalBytes == 4) {return "movsxd " + target + ", " + original;}

@@ -89,6 +89,11 @@ public:
                     flush();
                     add(tokenType::semi_colon, ";");
                     break; 
+
+                case ',':
+                    flush();
+                    add(tokenType::comma, ",");
+                    break;
                     
                 case '=':
                     flush();

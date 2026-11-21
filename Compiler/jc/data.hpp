@@ -35,7 +35,50 @@ struct objectData{
     // to be added onto with classes later?
 };
 
+struct parameterData{
+    std::string name;
+    variableData typeData;
+    uint64_t address;
+};
 
+struct methodData{
+    std::string name;
+    std::vector<parameterData> paremeters;
+    variableData returnType;
+
+    uint64_t currentAddress = 32;
+    uint64_t maxStackSize = 32;
+    std::unordered_map<std::string, variableData> scope;
+    methodData* parentMethod = nullptr;
+    bool hasVariable(std::string& vname){
+        if(scope.find(vname) != scope.end()){
+            return true;    
+        }
+        else if(parentMethod != nullptr){
+            return parentMethod->hasVariable(vname);
+        }
+        else{
+            return false;
+        }
+    }
+    variableData getVariable(std::string& vname){
+        if(scope.find(vname) != scope.end()){
+            return scope[vname];    
+        }
+        else if(parentMethod != nullptr){
+            return parentMethod->getVariable(vname);
+        }
+        else{
+            throw std::runtime_error("variable '" + vname + "' does not exist in scope of method '" + name + "'");
+        }
+    }
+
+    void addVariable(std::string vname, variableData data){
+        if(hasVariable(vname)) throw std::runtime_error("variable of name '" + vname + "' already exists in scope of method '" + name + "'");
+
+        scope[vname] = data;
+    }
+};
 
 class data{
 public:
@@ -43,7 +86,10 @@ public:
     static inline std::vector<std::string> keywords = {
         "if",
         "else",
-        "while"
+        "while",
+        "for",
+
+        "return"
     };
 
     static inline std::vector<std::string> boolOperators = {

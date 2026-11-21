@@ -13,6 +13,11 @@ class codegen{
 private:
     static inline std::string header;
     static inline std::string data_;
+    static inline std::string methods;
+
+    static inline std::unordered_map<std::string, methodData> mData;
+
+    static inline bool redirect_to_method;
 
     static inline std::string text;
     static inline bool tabbed;
@@ -36,11 +41,23 @@ private:
     }
 
     static void emit(std::string _nasm){
-        if(tabbed) text+="    ";
-        text+=_nasm + "\n";
+        if(redirect_to_method){
+            if(tabbed) methods+="    ";
+            methods += _nasm + "\n";
+        }
+        else{
+            if(tabbed) text+="    ";
+            text+=_nasm + "\n";
+        }
     }
+
     static void label(std::string _lbl){
-        text+= _lbl + ":\n";
+        if(redirect_to_method){
+            methods += _lbl + ":\n";
+        }
+        else{
+            text+= _lbl + ":\n";
+        }
     }
 
     static void data(std::string newData, bool addSpace = true){
@@ -150,6 +167,43 @@ private:
 
         label(endName);
         emit("; ("+id+") while end" );
+    }
+
+    static void generateFor(forNode* For){
+        std::string id = str(getLabelId());
+        std::string bodyName = "for_body_"+id;
+        std::string endName = "for_end_"+id;
+
+        emit("; ("+id+") 'for' decl" );
+        generateVariableDecl(dynamic_cast<variableDeclNode*>(For->decl.get()));
+
+        emit("; ("+id+") 'for' condition" );
+        generateExpression(For->condition.get(), true);
+    
+        emit("; ("+id+") 'for' comparison and jumping" );
+        emit("cmp al, 1");
+        emit("je " + bodyName);
+        emit("jmp " + endName);
+    
+        emit("");
+
+        label(bodyName);
+        emit("; ("+id+") 'for' body" );
+        
+        generateBody(For->body);
+        emit("; ("+id+") 'for' step");
+        generateVarReassignment(dynamic_cast<variableResNode*>(For->step.get()));
+        emit("; ("+id+") 'for' condition" );
+
+        generateExpression(For->condition.get(), true);
+        emit("cmp al, 1");
+        emit("je " + bodyName);
+        emit("jmp " + endName);
+
+        emit("");
+
+        label(endName);
+        emit("; ("+id+") 'for' end" );
 
     }
 
@@ -190,7 +244,9 @@ private:
 
             generateExpression(bin->left.get(), true);
             if(isFloat) pushFloat(true);
-            else emit("push " + abstr::getRegister(t, true, false));
+            else {
+                emit("push " + abstr::getRegister(t, true, false));
+            }
 
             generateExpression(bin->right.get(), true);
 
@@ -249,7 +305,69 @@ private:
         if(logs) emit(""); // new line. makes assembly easier to read and nicer
     }
 
-    static void generateHeader(size_t stackSize){
+    static void generateMethodDecl(methodDeclNode* methodDecl){
+        uint64_t& stackSize = mData[methodDecl->name].maxStackSize;
+
+        // calculate stack size with 16 multiple checking thingys
+        if (stackSize % 16 != 0) {
+            stackSize += 16 - (stackSize % 16);
+        }
+        std::string labelName;
+        if(methodDecl->name != "main"){
+            labelName = "_";
+        }
+        labelName += methodDecl->name;
+
+        bool old_redirect = redirect_to_method;
+        bool oldTabbed = tabbed;
+        redirect_to_method = true;
+        label(labelName);
+        tabbed = true;
+
+        // save old frame pointer
+        emit("push rbp");
+        // ancher new base pointer
+        emit("mov rbp, rsp");
+        // get stack space 'carve out' ig bro..
+        emit("sub rsp, "+ str(stackSize));
+
+        
+        
+        generateBody(methodDecl->body);
+
+        emit("");
+        tabbed = true;
+
+        if(methodDecl->returnType.dataType == variableType::Void){
+            emit("");
+            emit("mov  rsp, rbp");
+            emit("pop rbp");
+            emit("ret");
+        }
+
+        redirect_to_method = old_redirect;
+        tabbed = oldTabbed;
+    }
+
+    static void generateReturn(returnNode* ret){
+        generateExpression(ret->expression.get(), true);
+
+        // frame pointer stuff
+        emit("mov  rsp, rbp");
+        emit("pop rbp");
+
+        // actual returning
+        emit("ret");
+    }
+
+    static void generateMethodCall(methodCallNode* call){
+        emit("call _" + call->methodName);
+    }
+
+    static void generateHeader(){
+        
+
+        // emit header stuff
         tabbed = false;
         header += "bits 64\n";
         header += "default rel\n";
@@ -262,76 +380,59 @@ private:
         emit("global main");
 
         emit("");
-        
-        // BEFORE METHODS CAN BE MADE (for now..):
-        label("main");
 
-        tabbed = true;
-
-        // save old frame pointer
-        emit("push rbp");
-        // ancher new base pointer
-        emit("mov rbp, rsp");
-        // get stack space 'carve out' ig bro..
-        emit("sub rsp, "+ str(stackSize));
-        emit("");
-    }
-
-    static void generateEnd(){
-        tabbed = true;
-    //text += R"(
-    //movss    xmm0, dword [rbp - 4]
-    //cvtss2sd xmm1, xmm0            ; printf takes doubles, so float32 must be widened
-    //movq     rdx, xmm1             ; variadic: the double goes in BOTH xmm1 and rdx
-    //lea      rcx, [rel fmt]        ; arg 1 = format string
-    //call     printf)";
-        emit("");
-        emit("mov  rsp, rbp");
-        emit("pop rbp");
-        emit("ret");
+        emit(methods);  
     }
 
     static void generateNode(node* node){
         if(auto* varDecl = dynamic_cast<variableDeclNode*>(node)){
             generateVariableDecl(varDecl);
-            return;
         }
         else if(auto* resVar = dynamic_cast<variableResNode*>(node)){
             generateVarReassignment(resVar);
-            return;
         }
         else if(auto* If = dynamic_cast<ifNode*>(node)){
             generateIf(If);
-            return;
         }
         else if(auto* While = dynamic_cast<whileNode*>(node)){
             generateWhile(While);
-            return;
+        }
+        else if(auto* For = dynamic_cast<forNode*>(node)){
+            generateFor(For);
+        }
+        else if(auto* methodDecl = dynamic_cast<methodDeclNode*>(node)){
+            generateMethodDecl(methodDecl);
+        }
+        else if(auto* ret = dynamic_cast<returnNode*>(node)){
+            generateReturn(ret);
+        }
+        else if(auto* call = dynamic_cast<methodCallNode*>(node)){
+            generateMethodCall(call);
         }
         else{
             throw std::runtime_error("codegen: unexpected node to be generated");
         }
-        
-        
     }
 public:
-    static std::string generate(std::vector<std::unique_ptr<node>>& nodes, size_t stackSize, bool log = false){
+    static std::string generate(std::vector<std::unique_ptr<node>>& nodes, std::unordered_map<std::string, methodData>& _methodData, bool log = false){
         header.clear();
         data_.clear();
         text.clear();
+
+        mData = _methodData;
+
+        redirect_to_method = false;
 
         labelCount = 0;
 
         logs = log;   
 
-        generateHeader(stackSize);
-
         for(auto& node : nodes){
             generateNode(node.get());
         }
 
-        generateEnd();
-
+        generateHeader();
+        
         std::string assembly = header + data_ + text;
 
         return assembly;

@@ -19,6 +19,8 @@ enum tokenType{
     open_curly,
     close_curly,
 
+    comma,
+
     end
 };
 
@@ -36,6 +38,7 @@ std::string tokenType_to_string(tokenType type) {
         case tokenType::close_bracket: return "CloseBracket";
         case tokenType::open_curly:    return "OpenCurly";
         case tokenType::close_curly:   return "CloseCurly";
+        case tokenType::comma:         return "Comma";
         case tokenType::end:           return "End";
         default:
             throw std::runtime_error("LACK SUPPORT FOR TOKEN TYPE TO STRING");

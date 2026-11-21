@@ -44,6 +44,13 @@ struct identifyerNode : public expressionNode{
     variableData type;
 };
 
+struct methodNode : public expressionNode{
+    std::string name;
+    std::vector<std::unique_ptr<expressionNode>> parameters;
+
+    variableData returnType;
+};
+
 using literalType = std::variant<int32_t, uint32_t, float>;
 
 struct literalNode : public expressionNode{
@@ -82,6 +89,8 @@ struct variableDeclNode : public node{
     }
 
     std::unique_ptr<expressionNode> expression;
+
+    bool isParameter;
 };
 
 struct variableResNode : public node{
@@ -99,4 +108,36 @@ struct ifNode : public node {
 struct whileNode : public node{
     std::unique_ptr<expressionNode> condition;
     std::vector<std::unique_ptr<node>> body;
+};
+
+struct forNode : public node{ 
+    std::unique_ptr<node> decl;     // varDeclNode
+    std::unique_ptr<expressionNode> condition;
+    std::unique_ptr<node> step;     // varResNode
+
+    std::vector<std::unique_ptr<node>> body;
+};
+
+
+struct methodDeclNode : public node{
+    std::string name;  // method name
+    variableData returnType;  // method return type
+    std::vector<parameterData> parameters;  // parameters
+    std::vector<std::unique_ptr<node>> body;  // method body
+
+    
+
+    methodDeclNode(std::string& _name, variableData& retType){
+        name = _name;
+        returnType = retType;
+    }
+};
+
+struct returnNode : public node{
+    std::unique_ptr<expressionNode> expression; // return expression so its X in: "return X;""
+};
+
+struct methodCallNode : public node{
+    std::string methodName;
+    std::vector<std::unique_ptr<expressionNode>> parameters;
 };
