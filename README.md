@@ -5,3 +5,6 @@
 * If Statements
 * While Loops
 
+## To Do
+* Method support in expressions
+* Direct assembly writing (for std wrapper and early printing)
