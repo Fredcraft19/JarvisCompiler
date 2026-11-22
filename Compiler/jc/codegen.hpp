@@ -279,6 +279,16 @@ private:
             print("    cast node");
             generateExpression(cast->expression.get(), isPrimary);
         }
+        else if(auto* call = dynamic_cast<methodNode*>(expr)){
+            print("    method (call) node");
+
+            for(auto& paremExpr : call->parameters){
+                generateExpression(paremExpr.get(), true);
+                emit("push rax");
+            }
+            
+            emit("call _" + call->name);
+        }
         else {
             throw std::runtime_error("codegen: unknown expression node type");
         }
@@ -288,20 +298,33 @@ private:
     static void generateVariableDecl(variableDeclNode* node){
 
         // expression
-       if(logs) emit("; " + node->name + "'s expression");
-        generateExpression(node->expression.get(), true);
 
-        // any casting
-        auto& from = node->expression->resolvedType;
-        auto& to = node->type;
-        std::string caster = abstr::getResize(from, to, node->expression->resolvedType.dataType);
-        if(logs && caster.length() > 0) emit("; cast value from " + str(from.totalBytes*8) + "-bit to " + str(to.totalBytes*8) + "-bit");
-        emit(caster);
+        int bytes = 0;
+        if(node->isParameter){
+            auto address = node->type.address;
+            emit("mov " + abstr::getRegister(node->type, true) + ", " + abstr::getDataType(node->type.totalBytes) + "[rbp + " + str(address) + "]");
+            bytes = node->type.totalBytes;
+        }
+        else{
+            if(logs) emit("; " + node->name + "'s expression");
+            generateExpression(node->expression.get(), true);
+
+            // any casting
+            auto& from = node->expression->resolvedType;
+            auto& to = node->type;
+            std::string caster = abstr::getResize(from, to, node->expression->resolvedType.dataType);
+            if(logs && caster.length() > 0) emit("; cast value from " + str(from.totalBytes*8) + "-bit to " + str(to.totalBytes*8) + "-bit");
+            emit(caster);
+            bytes = to.totalBytes;
+        }
+       
+
+        
 
         // saving onto stack
         if(logs) emit("; " + node->name + " saved in stack");
-        if(node->type.dataType == variableType::Float) emit("movss " + abstr::getDataType(to.totalBytes) + " [rbp - " + str(node->type.address) + "], "+ abstr::getRegister(node->type, true));
-        else emit("mov " + abstr::getDataType(to.totalBytes) + " [rbp - " + str(node->type.address) + "], "+ abstr::getRegister(node->type, true));
+        if(node->type.dataType == variableType::Float) emit("movss " + abstr::getDataType(bytes) + " [rbp - " + str(node->type.address) + "], "+ abstr::getRegister(node->type, true));
+        else emit("mov " + abstr::getDataType(bytes) + " [rbp - " + str(node->type.address) + "], "+ abstr::getRegister(node->type, true));
         if(logs) emit(""); // new line. makes assembly easier to read and nicer
     }
 

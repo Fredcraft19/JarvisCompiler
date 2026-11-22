@@ -91,6 +91,7 @@ struct variableDeclNode : public node{
     std::unique_ptr<expressionNode> expression;
 
     bool isParameter;
+    int parameterIndex;
 };
 
 struct variableResNode : public node{

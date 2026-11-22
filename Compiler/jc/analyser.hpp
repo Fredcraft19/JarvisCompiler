@@ -225,21 +225,32 @@ private:
 
         std::vector<std::unique_ptr<variableDeclNode>> parameterNodes;
 
-        for(auto& parem : dat.paremeters){
+        uint64_t cAddr = 0;
+        for(int i = 0; i < dat.paremeters.size(); i++){
+            auto& parem = dat.paremeters[i];
             auto decl = std::make_unique<variableDeclNode>(parem.name, parem.typeData);
+
             decl->isParameter = true;
-            parameterNodes.push_back(decl);
+            decl->parameterIndex = i;
+            decl->type = parem.typeData;
+
+            cAddr += decl->type.totalBytes;
+            decl->type.address = cAddr;
+
+            parameterNodes.push_back(std::move(decl));
         }
-        
-        // update the current method
-        currentMethod = &dat;
-        // analyse method's body under new currentMethod
-        analyseBody(methodDecl->body);
-        // reset the current method to the original one (if any)
-        currentMethod = old_method;
 
         // add parameter declarations at the top
-        methodDecl->body.insert(methodDecl->body.begin(), parameterNodes.begin(), parameterNodes.end());
+        methodDecl->body.insert(methodDecl->body.begin(), std::make_move_iterator(parameterNodes.begin()), std::make_move_iterator(parameterNodes.end()));
+
+        // update the current method
+        currentMethod = &dat;
+        
+        // analyse method's body under new currentMethod
+        analyseBody(methodDecl->body);
+
+        // reset the current method to the original one (if any)
+        currentMethod = old_method;
 
         // update codegen's map for its data on stack sizes
         methods_for_codegen[methodDecl->name] = dat;

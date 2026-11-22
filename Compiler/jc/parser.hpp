@@ -62,32 +62,25 @@ private:
                 return expr;
             }
             case tokenType::identifyer:{
-                if(advance().type == tokenType::open_bracket){  // method
+                if(check(tokenType::open_bracket)){  // method call
+                    advance(); // take '('
                     auto call = std::make_unique<methodNode>();
                     call->name = tok.value;
-                    if(advance().type != tokenType::close_bracket){ // parameters
-                        while(peek().type != tokenType::close_bracket && peek().type != tokenType::end){
-                            call->parameters.push_back(parseExpression());
-                            if(peek().type == tokenType::close_bracket){
-                                advance(); // take ')'
-                                return call;
-                            }
-                            else if(peek().type == tokenType::comma){
-                                advance(); // take comma
-                            }
-                            else{
-                                throw std::runtime_error("line " + std::to_string(peek().line) + "| expected a ',' or ')' in method parameters (unexpected token) ->" + peek().string());
-                            }
-                        }
+
+                    while(!check(tokenType::close_bracket) && !check(tokenType::end)){
+                        call->parameters.push_back(parseExpression());
+                        if(check(tokenType::comma)) advance();
+                        else if(!check(tokenType::close_bracket))
+                            throw std::runtime_error("line " + std::to_string(peek().line) + "| expected ',' or ')' in method call");
                     }
+                    if(!check(tokenType::close_bracket))
+                        throw std::runtime_error("line " + std::to_string(peek().line) + "| expected ')' to close method call");
+                    advance(); // take ')'
                     return call;
                 }
-                else{       // variable
-                    back();
-                    auto ptr = std::make_unique<identifyerNode>();
-                    ptr->name = tok.value;
-                    return ptr;
-                }
+                auto ptr = std::make_unique<identifyerNode>();
+                ptr->name = tok.value;
+                return ptr;
             }
             case tokenType::oper:{
                 bool invalidType = peek().type != tokenType::integer && peek().type != tokenType::floating;
