@@ -58,7 +58,7 @@ private:
         return false;
     }
 
-    static methodData findMethod(std::string& methodName){
+    static methodData& findMethod(std::string& methodName){
         for(auto& sr : methodScopes){
             if(sr.find(methodName) != sr.end()){
                 return sr[methodName];
@@ -78,7 +78,7 @@ private:
         methodScopes.emplace_back();
     }
 
-    static variableData analysePrimary(node* node, bool expectUnsigned = false){
+    static variableData& analysePrimary(node* node, bool expectUnsigned = false){
         if(auto* lit = dynamic_cast<literalNode*>(node)){
             if(lit->resolvedType.dataType == variableType::Int && expectUnsigned){
                 lit->resolvedType.dataType = variableType::Uint;
@@ -99,6 +99,9 @@ private:
             variableData data = findInScope(idName);
             id->resolvedType = data;
             id->address = data.address;
+            if(data.address == 0){
+                throw std::runtime_error("analyser: address for variable: '" + id->name + "' was 0 during analysePrimary");
+            }
             return id->resolvedType;            
         }
         else if(auto* call = dynamic_cast<methodNode*>(node)){
@@ -107,6 +110,9 @@ private:
             methodData data = findMethod(name);
             call->resolvedType = data.returnType;
             call->returnType = data.returnType;
+            for(auto& p : call->parameters){
+                analyseExpression(p);
+            }
             return call->resolvedType;
         }
         else if(auto* cast = dynamic_cast<castNode*>(node)){
@@ -144,9 +150,8 @@ private:
         }
 
         node->type.address = getAddress(node->type.totalBytes);
-
         addInScope(node->name, node->type);
-
+        
         if(node->expression){
             variableData exprType = analyseExpression(node->expression, node->type.dataType == variableType::Uint);
             if(exprType.dataType != node->type.dataType){
@@ -218,29 +223,32 @@ private:
 
         methodData dat;
         dat.name = methodDecl->name;
-        dat.paremeters = methodDecl->parameters;
         dat.returnType = methodDecl->returnType;
         dat.parentMethod = currentMethod;
+        dat.paremeters = methodDecl->parameters;
         addMethod(dat);
-
+        
         std::vector<std::unique_ptr<variableDeclNode>> parameterNodes;
 
-        uint64_t cAddr = 0;
+        uint64_t cAddr = 32; // shadow space for windows...
         for(int i = 0; i < dat.paremeters.size(); i++){
             auto& parem = dat.paremeters[i];
-            auto decl = std::make_unique<variableDeclNode>(parem.name, parem.typeData);
 
-            decl->isParameter = true;
-            decl->parameterIndex = i;
-            decl->type = parem.typeData;
+            cAddr += parem.typeData.totalBytes;
 
-            cAddr += decl->type.totalBytes;
-            decl->type.address = cAddr;
+            // use the reference to set it, so codegen can use it
+            parem.address = i * 8;
+            parem.typeData.address = cAddr;
 
-            parameterNodes.push_back(std::move(decl));
+            //dat.scope[parem.name] = parem.typeData;
+
+            auto ptr = std::make_unique<variableDeclNode>(parem.name, parem.typeData);
+            ptr->isParameter = true;
+            ptr->parameterIndex = i + 1;
+            parameterNodes.push_back(std::move(ptr));
+
         }
 
-        // add parameter declarations at the top
         methodDecl->body.insert(methodDecl->body.begin(), std::make_move_iterator(parameterNodes.begin()), std::make_move_iterator(parameterNodes.end()));
 
         // update the current method
@@ -268,7 +276,8 @@ private:
 
         auto method = findMethod(call->methodName);
         if(method.paremeters.size() != call->parameters.size()) if(!checkMethod(call->methodName)) throw std::runtime_error("analyser: invalid parameters for method: '" + call->methodName + "'");
-    
+        
+
         for(auto& parem : call->parameters){
             analyseExpression(parem);
         }
@@ -307,6 +316,9 @@ private:
         }
         else if(auto* call = dynamic_cast<methodCallNode*>(node)){
             analyseCall(call);
+        }
+        else if(auto* direct = dynamic_cast<directNode*>(node)){
+            // ignore because '__direct' isnt analysed
         }
         else{
             throw std::runtime_error("analyser: unexpected node to be analysed");

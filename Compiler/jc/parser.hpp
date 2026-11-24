@@ -352,12 +352,29 @@ private:
         return Ret;
     }
 
+    static std::unique_ptr<node> parseDirect(){
+        advance(); // take '__direct'
+        std::unique_ptr<directNode> dir = std::make_unique<directNode>();
+        if(!check(tokenType::open_bracket)) throw std::runtime_error("line " + std::to_string(peek().line) + "| incorrect use of '__direct' expected use: '__direct(\"assembly goes here...\")'");
+        advance();
+        if(!check(tokenType::string)) throw std::runtime_error("line " + std::to_string(peek().line) + "| incorrect use of '__direct' expected use: '__direct(\"assembly goes here...\")'");
+        dir->direct_asm = peek().value;
+        advance();
+        if(!check(tokenType::close_bracket)) throw std::runtime_error("line " + std::to_string(peek().line) + "| incorrect use of '__direct' expected use: '__direct(\"assembly goes here...\")'");
+        advance();
+        if(!check(tokenType::semi_colon)) throw std::runtime_error("line " + std::to_string(peek().line) + "| expected a ';' after '__direct()' usage");
+        advance();
+        return dir;  
+    }
+
     // hyper overengineered but larp worthy
     static inline std::unordered_map<std::string, std::unique_ptr<node>(*)()> parsableKeywords = {
         {"if", parseIf},
         {"while", parseWhile},
         {"for", parseFor},
-        {"return", parseReturn}
+        {"return", parseReturn},
+
+        {"__direct", parseDirect}
     };
 
     static std::unique_ptr<node> parseKeyword(){

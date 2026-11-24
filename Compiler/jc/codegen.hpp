@@ -95,9 +95,62 @@ private:
         }
     }
 
+    static void generateVariableDecl(variableDeclNode* node){
+
+        // expression
+
+        int bytes = 0;
+        if(node->isParameter){
+            emit("; (is parameter)");
+            emit("mov " + abstr::getRegister(node->type, true) + ", " + abstr::getDataType(node->type.totalBytes) + "[rbp + " + str(node->parameterIndex * 8 + 8) + "]");
+            bytes = node->type.totalBytes;
+        }
+        else{
+            if(logs) emit("; " + node->name + "'s expression");
+            generateExpression(node->expression.get(), true);
+
+            // any casting
+            auto& from = node->expression->resolvedType;
+            auto& to = node->type;
+            std::string caster = abstr::getResize(from, to, node->expression->resolvedType.dataType);
+            if(logs && caster.length() > 0) emit("; cast value from " + str(from.totalBytes*8) + "-bit to " + str(to.totalBytes*8) + "-bit");
+            emit(caster);
+            bytes = to.totalBytes;
+        }
+
+        // saving onto stack
+        if(logs) emit("; " + node->name + " saved in stack");
+        if(node->type.dataType == variableType::Float) emit("movss " + abstr::getDataType(bytes) + " [rbp - " + str(node->type.address) + "], "+ abstr::getRegister(node->type, true));
+        else emit("mov " + abstr::getDataType(bytes) + " [rbp - " + str(node->type.address) + "], "+ abstr::getRegister(node->type, true));
+        if(logs) emit(""); // new line. makes assembly easier to read and nicer
+    }
+
+    static void generateMethodParameterDecl(variableDeclNode* n){
+        // ignore expression: get from stack
+        // can easily be changed to support default/optional parameters!
+        // essential for QoL
+        // just realised this isnt needed! yipee
+    }
+
     static void generateBody(std::vector<std::unique_ptr<node>>& body){
         for(auto& Node: body){
             generateNode(Node.get());
+        }
+    }
+
+    static void generateMethodBody(std::vector<std::unique_ptr<node>>& body){
+        for(auto& n : body){
+            if(auto* ptr = dynamic_cast<variableDeclNode*>(n.get())){
+                if(ptr->isParameter){
+                    generateMethodParameterDecl(ptr);
+                }
+                else{
+                    generateNode(n.get());
+                }
+            }
+            else{
+                generateNode(n.get());
+            }
         }
     }
 
@@ -232,7 +285,7 @@ private:
         }
         else if (auto* id = dynamic_cast<identifyerNode*>(expr)) {
             print("    identifyer node");
-            if(id->address == 0) {throw std::runtime_error("codegen: non existant address for identifyer node in expression");}
+            if(id->resolvedType.address == 0) {throw std::runtime_error("codegen: non existant address for identifyer node in expression :" + id->name);}
 
             emit(abstr::mov(id->resolvedType, abstr::getRegister(id->resolvedType, true), "[rbp - " + str(id->resolvedType.address) + "]"));
         }
@@ -281,51 +334,20 @@ private:
         }
         else if(auto* call = dynamic_cast<methodNode*>(expr)){
             print("    method (call) node");
-
-            for(auto& paremExpr : call->parameters){
-                generateExpression(paremExpr.get(), true);
+            // get parameter
+            for(int i = call->parameters.size()-1; i >= 0 ; i--){
+                generateExpression(call->parameters[i].get(), true);
                 emit("push rax");
             }
-            
+            // call
             emit("call _" + call->name);
+            // clean up
+            emit("add rsp, " + str(call->parameters.size() * 8));
         }
         else {
             throw std::runtime_error("codegen: unknown expression node type");
         }
         print("    retruning from expr");
-    }
-
-    static void generateVariableDecl(variableDeclNode* node){
-
-        // expression
-
-        int bytes = 0;
-        if(node->isParameter){
-            auto address = node->type.address;
-            emit("mov " + abstr::getRegister(node->type, true) + ", " + abstr::getDataType(node->type.totalBytes) + "[rbp + " + str(address) + "]");
-            bytes = node->type.totalBytes;
-        }
-        else{
-            if(logs) emit("; " + node->name + "'s expression");
-            generateExpression(node->expression.get(), true);
-
-            // any casting
-            auto& from = node->expression->resolvedType;
-            auto& to = node->type;
-            std::string caster = abstr::getResize(from, to, node->expression->resolvedType.dataType);
-            if(logs && caster.length() > 0) emit("; cast value from " + str(from.totalBytes*8) + "-bit to " + str(to.totalBytes*8) + "-bit");
-            emit(caster);
-            bytes = to.totalBytes;
-        }
-       
-
-        
-
-        // saving onto stack
-        if(logs) emit("; " + node->name + " saved in stack");
-        if(node->type.dataType == variableType::Float) emit("movss " + abstr::getDataType(bytes) + " [rbp - " + str(node->type.address) + "], "+ abstr::getRegister(node->type, true));
-        else emit("mov " + abstr::getDataType(bytes) + " [rbp - " + str(node->type.address) + "], "+ abstr::getRegister(node->type, true));
-        if(logs) emit(""); // new line. makes assembly easier to read and nicer
     }
 
     static void generateMethodDecl(methodDeclNode* methodDecl){
@@ -335,10 +357,12 @@ private:
         if (stackSize % 16 != 0) {
             stackSize += 16 - (stackSize % 16);
         }
+
         std::string labelName;
         if(methodDecl->name != "main"){
             labelName = "_";
         }
+        
         labelName += methodDecl->name;
 
         bool old_redirect = redirect_to_method;
@@ -354,8 +378,6 @@ private:
         // get stack space 'carve out' ig bro..
         emit("sub rsp, "+ str(stackSize));
 
-        
-        
         generateBody(methodDecl->body);
 
         emit("");
@@ -363,7 +385,7 @@ private:
 
         if(methodDecl->returnType.dataType == variableType::Void){
             emit("");
-            emit("mov  rsp, rbp");
+            emit("mov rsp, rbp");
             emit("pop rbp");
             emit("ret");
         }
@@ -376,7 +398,7 @@ private:
         generateExpression(ret->expression.get(), true);
 
         // frame pointer stuff
-        emit("mov  rsp, rbp");
+        emit("mov rsp, rbp");
         emit("pop rbp");
 
         // actual returning
@@ -384,7 +406,23 @@ private:
     }
 
     static void generateMethodCall(methodCallNode* call){
+        // parameter injection into the called method's stack (before it exists?!)
+        // +32 because of per-method shadow space (windows i love you)
+        for(int i = call->parameters.size()-1; i >= 0 ; i--){
+            // expression
+            emit("; expression for parameter: " + str(i));
+            generateExpression(call->parameters[i].get(), true);
+            emit("; injection for parameter: " + str(i));
+            emit("push rax");
+        }
+        
+
+        // calling
         emit("call _" + call->methodName);
+
+        // clean up
+        emit("add rsp, " + str(call->parameters.size() * 8));
+        
     }
 
     static void generateHeader(){
@@ -394,13 +432,14 @@ private:
         tabbed = false;
         header += "bits 64\n";
         header += "default rel\n";
-        header += "extern printf\n";
 
         data("\nsection .data", false);
-        data (R"(fmt db "%f", 10, 0)");
+        data (R"(ifmt db "int: %d", 10, 0)");
+        data (R"(ffmt db "float: %f", 10, 0)");
 
         emit("\nsection .text");
-        emit("global main");
+        emit("    extern printf\n");
+        emit("    global main");
 
         emit("");
 
@@ -431,6 +470,9 @@ private:
         }
         else if(auto* call = dynamic_cast<methodCallNode*>(node)){
             generateMethodCall(call);
+        }
+        else if(auto* dir = dynamic_cast<directNode*>(node)){
+            emit(dir->direct_asm);  // super hard!
         }
         else{
             throw std::runtime_error("codegen: unexpected node to be generated");

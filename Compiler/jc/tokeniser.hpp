@@ -72,8 +72,15 @@ public:
         
         lineCount = 1;
 
+        uint32_t qc = 0;
+
         for(int i = 0; i < source.length(); i++){
             char ch = source[i];
+
+            if(qc % 2 != 0 && ch != '"'){
+                word += ch;
+                continue;
+            }
 
             switch(ch){
                 case '\r':
@@ -83,6 +90,14 @@ public:
 
                 case ' ':
                     flush();
+                    break;
+
+                case '"':
+                    qc++;
+                    if(qc % 2 == 0){    // finished quote 
+                        add(tokenType::string, word);
+                        word = "";
+                    }
                     break;
 
                 case ';':
@@ -128,7 +143,7 @@ public:
                     break;
                 case ')':
                     flush();
-                    add(tokenType::close_bracket, std::string(0, ch));
+                    add(tokenType::close_bracket, std::string(1, ch));
                     break;
 
                 case '{':
@@ -137,7 +152,7 @@ public:
                     break;
                 case '}':
                     flush();
-                    add(tokenType::close_curly, std::string(0, ch));
+                    add(tokenType::close_curly, std::string(1, ch));
                     break;
 
 

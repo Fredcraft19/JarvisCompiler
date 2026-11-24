@@ -1,15 +1,21 @@
-
-int add(int a, int b){
-    return a + b;
+void print(){
+    __direct("lea rcx, [rel ifmt]");
+    __direct("mov edx, eax");
+    __direct("call printf");
 }
+
+int64 pow(int value, int exponent){
+    int64 out = 1;
+    for(int i = 0; i < exponent; i++){
+        out *= value;
+    }
+    return out;
+}
+
 
 int main(){
-    int a = 20;
-    int b = 12;
-
-    return add(a, b);
+    pow(2, 4);
+    print();
+    return 0;
 }
-
-
-
 

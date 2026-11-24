@@ -61,7 +61,7 @@ struct methodData{
             return false;
         }
     }
-    variableData getVariable(std::string& vname){
+    variableData& getVariable(std::string& vname){
         if(scope.find(vname) != scope.end()){
             return scope[vname];    
         }
@@ -89,7 +89,10 @@ public:
         "while",
         "for",
 
-        "return"
+        "return",
+
+
+        "__direct" // direct assembly writing bypassing any analysing
     };
 
     static inline std::vector<std::string> boolOperators = {

@@ -42,6 +42,7 @@ struct identifyerNode : public expressionNode{
     std::string name;
     size_t address;
     variableData type;
+    bool isMethod;
 };
 
 struct methodNode : public expressionNode{
@@ -86,6 +87,7 @@ struct variableDeclNode : public node{
     variableDeclNode(std::string _name, variableData _type){
         name = _name;
         type = _type;
+        isParameter = false;
     }
 
     std::unique_ptr<expressionNode> expression;
@@ -141,4 +143,11 @@ struct returnNode : public node{
 struct methodCallNode : public node{
     std::string methodName;
     std::vector<std::unique_ptr<expressionNode>> parameters;
+};
+
+
+
+
+struct directNode : public node{
+    std::string direct_asm;
 };

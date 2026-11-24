@@ -116,9 +116,10 @@ public:
     }
 
     static void compile_and_run(std::string sourceFile, bool log = false, bool autoClearUp = true){
+        std::cout << "executing program..\n";
         compile(sourceFile, "jit_produce.exe",log,  autoClearUp);
         int stat = std::system("jit_produce.exe");
-        std::cout << "program exited with code:\n" << std::to_string(stat) << "\n";
+        std::cout << std::to_string(stat) << "\n";
 
         if(autoClearUp){std::filesystem::remove("jit_produce.exe");}
     }
