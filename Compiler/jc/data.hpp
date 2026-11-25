@@ -13,6 +13,8 @@ enum variableType{
     Bool,
     Void,
 
+    Pointer,
+
     Error
 };
 
@@ -20,13 +22,24 @@ struct variableData{
     size_t totalBytes;
     variableType dataType;
     uint64_t address = 0;
+
+    bool isReference;
+
+    bool isPointer;
+    size_t pointeeBytes;
+    variableType pointeeType;
+
     variableData(size_t bytes, variableType type){
         totalBytes = bytes; 
-        dataType = type;    
+        dataType = type;  
+        
+        isReference = false; isPointer = false;
     }
     variableData(){
         totalBytes = 0;
         dataType = variableType::Error;
+
+        isReference = false; isPointer = false;
     }
 };
 

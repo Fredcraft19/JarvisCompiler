@@ -106,7 +106,7 @@ private:
         }
         else if(auto* call = dynamic_cast<methodNode*>(node)){
             std::string& name = call->name;
-            if(!checkMethod(name)) throw std::runtime_error("analyser: method '"+ name+"' does not exist in scope for primary analysis");
+            if(!checkMethod(name)) throw std::runtime_error("analyser: method '"+ name+"' does not exist in scope for primary (call) analysis");
             methodData data = findMethod(name);
             call->resolvedType = data.returnType;
             call->returnType = data.returnType;
@@ -118,6 +118,24 @@ private:
         else if(auto* cast = dynamic_cast<castNode*>(node)){
             analyseExpression(cast->expression);
             return cast->resolvedType;
+        }
+        else if(auto* ptr = dynamic_cast<pointerNode*>(node)){
+            if(!checkInScope(ptr->target)) throw std::runtime_error("analyser: variable '"+ ptr->target+"' does not exist in scope for primary (ptrN) analysis");
+            auto pointee = findInScope(ptr->target);
+            variableData dat;
+            dat.dataType = pointee.pointeeType;
+            dat.totalBytes = pointee.pointeeBytes;
+            ptr->resolvedType = dat;
+            ptr->targetData = pointee;
+            return ptr->resolvedType;
+        }
+        else if(auto* ref = dynamic_cast<referenceNode*>(node)){
+            if(!checkInScope(ref->target)) throw std::runtime_error("analyser: variable '"+ ref->target+"' does not exist in scope for primary (refN) analysis");
+            ref->resolvedType.totalBytes = 8;
+            ref->resolvedType.dataType = variableType::Pointer;
+            auto target_Data = findInScope(ref->target);
+            ref->targetData = target_Data;
+            return ref->resolvedType;
         }
 
         throw std::runtime_error("analyser: unknown primary 'expression' was attempted to be analysed");
@@ -149,7 +167,18 @@ private:
             throw std::runtime_error("analyser: variable or method of name '" + node->name+"' already exists in scope");
         }
 
-        node->type.address = getAddress(node->type.totalBytes);
+        if(node->type.isReference){
+            node->type.address = getAddress(8);
+            if(!node->isParameter){
+                auto* id = dynamic_cast<identifyerNode*>(node->expression.get());
+                if(!id) throw std::runtime_error("analyser: a reference must be initialised from a variable");
+                if(!checkInScope(id->name)) throw std::runtime_error("analyser: variable " + id->name + " does not exist to be made a reference");
+            }
+        }
+        else{
+            node->type.address = getAddress(node->type.totalBytes);
+        }
+
         addInScope(node->name, node->type);
         
         if(node->expression){

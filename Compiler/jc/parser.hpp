@@ -83,26 +83,45 @@ private:
                 return ptr;
             }
             case tokenType::oper:{
-                bool invalidType = peek().type != tokenType::integer && peek().type != tokenType::floating;
                 bool wrongOperator = tok.value != "-";
-                if(invalidType || wrongOperator) throw std::runtime_error("line " + std::to_string(tok.line) + "| unknown token to parse as primary :" + peek().string());
 
-                // parse something like -5 to be 0-5
-                tok = advance();
-                if(tok.type == tokenType::integer){  // for a negative integer
-                    int32_t value=0;
-                    std::from_chars(tok.value.data(), tok.value.data() + tok.value.size(), value);
-                    variableData data = data::primatives["int32"];
-                    return std::make_unique<binaryExpresssionNode>(std::make_unique<literalNode>(0, data::primatives["int32"]), "-", std::make_unique<literalNode>(value, data));
+                if(wrongOperator){
+                    if(!(tok.value == "&" || tok.value == "*")) throw std::runtime_error("line " + std::to_string(peek().line) + "| expected a '-', '&' or '*' as a prefix. No other operators are allowed before identifyers or in expressions");
+                    
+                    if(tok.value == "&"){
+                        auto ref = std::make_unique<referenceNode>();
+                        if(!check(tokenType::identifyer)) throw std::runtime_error("line " + std::to_string(peek().line) + "| expected an identifyer after a prefix operator usage");
+                        ref->target = peek().value;
+                        advance();
+                        return ref;
+                    }
+                    else{ // *
+                        auto ptr = std::make_unique<pointerNode>();
+                        if(!check(tokenType::identifyer)) throw std::runtime_error("line " + std::to_string(peek().line) + "| expected an identifyer after a prefix operator usage");
+                        ptr->target = peek().value;
+                        advance();
+                        return ptr;
+                    }
+                    
                 }
-                else if(tok.type == tokenType::floating){    // for a negative float
-                    float value=0;
-                    std::from_chars(tok.value.data(), tok.value.data() + tok.value.size(), value);
-                    variableData data = data::primatives["float32"];
-                    return std::make_unique<binaryExpresssionNode>(std::make_unique<literalNode>(0, data::primatives["float32"]), "-", std::make_unique<literalNode>(value, data));
-                }
-                else{   // mystery error fall back
-                    throw std::runtime_error("line " + std::to_string(tok.line) + "| unknown token to parse as primary\nFUNKY EDITION ERROR!!!");
+                else{
+                    // parse something like -5 to be 0-5
+                    tok = advance();
+                    if(tok.type == tokenType::integer){  // for a negative integer
+                        int32_t value=0;
+                        std::from_chars(tok.value.data(), tok.value.data() + tok.value.size(), value);
+                        variableData data = data::primatives["int32"];
+                        return std::make_unique<binaryExpresssionNode>(std::make_unique<literalNode>(0, data::primatives["int32"]), "-", std::make_unique<literalNode>(value, data));
+                    }
+                    else if(tok.type == tokenType::floating){    // for a negative float
+                        float value=0;
+                        std::from_chars(tok.value.data(), tok.value.data() + tok.value.size(), value);
+                        variableData data = data::primatives["float32"];
+                        return std::make_unique<binaryExpresssionNode>(std::make_unique<literalNode>(0, data::primatives["float32"]), "-", std::make_unique<literalNode>(value, data));
+                    }
+                    else{   // mystery error fall back
+                        throw std::runtime_error("line " + std::to_string(tok.line) + "| expected a float or integer value after prefix operator used");
+                    }
                 }
             }
             default:
@@ -161,6 +180,27 @@ private:
 
                 advance(); // take 'TYPE'
 
+                if(check(tokenType::oper)){
+                    if(peek().value == "*"){
+                        parem.typeData.isPointer = true;
+
+                        parem.typeData.pointeeBytes = typeData.totalBytes;
+                        parem.typeData.pointeeType = typeData.dataType;
+
+                        parem.typeData.totalBytes = 8;
+                        parem.typeData.dataType = variableType::Pointer;
+                    }
+                    else if(peek().value == "&"){
+                        parem.typeData.isReference = true;
+                    }
+                    else{
+                        throw std::runtime_error("line " + std::to_string(peek().line) + "| expected either a * or & after type for method/variable declaration");
+                    }
+                    advance();
+                    
+                    if(!check(tokenType::identifyer)) throw std::runtime_error("line " + std::to_string(peek().line) + "| expected an identifyer after type for variable declaration for method parameters");
+                }
+
                 if(!check(tokenType::identifyer))  throw std::runtime_error("line " + std::to_string(peek().line) + "| expected a identifyer in the format 'methodName(TYPE NAME, TYPE2 NAME2, etc..)' instead of ->" + peek().value);
                 parem.name = peek().value;
                 
@@ -215,6 +255,9 @@ private:
     static std::unique_ptr<node> parseTypeDecl(){
         variableData typeData;
 
+        typeData.isPointer = false;
+        typeData.isReference = false;
+
         if(data::primatives.find(peek().value) != data::primatives.end()){
             typeData = data::primatives[peek().value];
         }
@@ -229,7 +272,29 @@ private:
             throw std::runtime_error("line " + std::to_string(peek().line) + "| type error");
         }
         advance(); // consume data type
-        if(!check(tokenType::identifyer)) throw std::runtime_error("line " + std::to_string(peek().line) + "| expected an identifyer after type in declaration of method or variable.");
+        if(!check(tokenType::identifyer) && !check(tokenType::oper)) throw std::runtime_error("line " + std::to_string(peek().line) + "| expected an identifyer (or operator for pointer/reference decl) after type in declaration of method or variable.");
+        
+        if(check(tokenType::oper)){
+            if(peek().value == "*"){
+                typeData.isPointer = true;
+
+                typeData.pointeeBytes = typeData.totalBytes;
+                typeData.pointeeType = typeData.dataType;
+
+                typeData.totalBytes = 8;
+                typeData.dataType = variableType::Pointer;
+            }
+            else if(peek().value == "&"){
+                typeData.isReference = true;
+            }
+            else{
+                throw std::runtime_error("line " + std::to_string(peek().line) + "| expected either a * or & after type for method/variable declaration");
+            }
+            advance();
+            
+            if(!check(tokenType::identifyer)) throw std::runtime_error("line " + std::to_string(peek().line) + "| expected an identifyer after type for method/variable declaration");
+        }
+
         std::string name = advance().value;    // get identifyer (var name or method name)
 
         // why no pre-existing var/method checks? Thats in the analyser stage!
@@ -435,7 +500,9 @@ private:
         static std::unique_ptr<node> parseShortVariableReassignment(std::string& name, bool needSemi = true){
         int line = peek().line;
         std::string oper = advance().value;
-        if(oper.length() != 2) throw std::runtime_error("line " + std::to_string(line) + "| bad short reassignment operator '" + oper + "'");
+        if(oper.length() != 2) {
+            throw std::runtime_error("line " + std::to_string(line) + "| bad short reassignment operator '" + oper + "'" + "prev :" + back().string() + back().string());
+        }
 
         auto self = std::make_unique<identifyerNode>();
         self->name = name;

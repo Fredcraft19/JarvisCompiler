@@ -120,7 +120,9 @@ public:
                         add(tokenType::equals, "=");
                     }
                     break;
-                    
+                
+                case '|':
+                case '&':
                 case '!':
                 case '<':
                 case '>':
@@ -130,7 +132,12 @@ public:
                 case '/':
                     flush();
                     if(last().type == tokenType::oper || last().type == tokenType::equals){
-                        last().value += std::string(1, ch);
+                        if(ch != '&' && ch != '*'){
+                            last().value += std::string(1, ch);
+                        }
+                        else{
+                            add(tokenType::oper, std::string(1, ch));
+                        }
                     }
                     else{
                         add(tokenType::oper, std::string(1, ch));

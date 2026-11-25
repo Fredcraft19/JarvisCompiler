@@ -261,6 +261,17 @@ public:
         }
     }
 
+    static std::string identifyerAddress(identifyerNode* id){
+        auto& type = id->resolvedType;
+        
+        if(type.isReference){ 
+            return "mov rax, [rbp - " + str(type.address) + "]";
+        }
+        else{ 
+            return "lea rax, [rbp - " + str(type.address) + "]";
+        }
+    }
+
     static std::string getResize(variableData& from, variableData& to, variableType type){
         if(from.totalBytes == to.totalBytes) return "";
         if(from.totalBytes > to.totalBytes) return "";

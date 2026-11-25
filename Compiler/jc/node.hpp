@@ -78,6 +78,15 @@ struct binaryExpresssionNode : public expressionNode{
 
 };
 
+struct referenceNode : public expressionNode{
+    std::string target;
+    variableData targetData;
+};
+struct pointerNode : public expressionNode{
+    std::string target;
+    variableData targetData;
+};
+
 // statement nodes
 
 struct variableDeclNode : public node{

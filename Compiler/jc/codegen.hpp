@@ -15,7 +15,7 @@ private:
     static inline std::string data_;
     static inline std::string methods;
 
-    static inline std::unordered_map<std::string, methodData> mData;
+    
 
     static inline bool redirect_to_method;
 
@@ -80,6 +80,7 @@ private:
 
     static void generateVarReassignment(variableResNode* res){
         emit("; " + res->name + " reassignment expression");
+        
         generateExpression(res->expression.get(), true);
         // the efficiency is.. amazing..
         // (std::string cmd = float ? "movss" : "mov")
@@ -87,7 +88,11 @@ private:
 
         emit("; " + res->name + " reassign to stack");
 
-        if(res->type.dataType == variableType::Float){
+        if(res->type.isReference){
+            emit("mov rdx, [rbp - " + str(res->type.address) + "]");
+            emit(std::string(res->type.dataType == variableType::Float ? "movss" : "mov") + " [rdx], " + abstr::getRegister(res->type, true));
+        }
+        else if(res->type.dataType == variableType::Float){
             emit("movss " + abstr::getDataType(res->type.totalBytes) + " [rbp - " + str(res->type.address) + "], " + abstr::getRegister(res->type, true));
         }
         else if (res->type.dataType == variableType::Int || res->type.dataType == variableType::Uint) {
@@ -100,6 +105,18 @@ private:
         // expression
 
         int bytes = 0;
+
+        if(node->type.isReference){
+            if(node->isParameter){
+                emit("mov rax, qword[rbp + " + str(node->parameterIndex * 8 + 8)+"]");
+            }
+            else{
+                emit( abstr::identifyerAddress( dynamic_cast<identifyerNode*> ( node->expression.get() ) ) );
+            }
+            emit("mov qword [rbp - " + str(node->type.address) + "], rax");
+            return;
+        }
+
         if(node->isParameter){
             emit("; (is parameter)");
             emit("mov " + abstr::getRegister(node->type, true) + ", " + abstr::getDataType(node->type.totalBytes) + "[rbp + " + str(node->parameterIndex * 8 + 8) + "]");
@@ -260,6 +277,19 @@ private:
 
     }
 
+    static void methodArgs(std::string& method, std::vector<std::unique_ptr<expressionNode>>& args){
+    auto& params = mData[method].paremeters;
+    for(int i = (int)args.size() - 1; i >= 0; i--){
+        if(params[i].typeData.isReference){
+            auto* id = dynamic_cast<identifyerNode*>(args[i].get());
+            if(!id) throw std::runtime_error("codegen: a reference parameter needs a variable as its argument");
+            emit(abstr::identifyerAddress(id));
+        }
+        else generateExpression(args[i].get(), true);
+        emit("push rax");
+    }
+}
+
     // isPrimary determins if it should prefer the primary or secondary register of its type
     // for example:
     // 45 + 5
@@ -283,11 +313,27 @@ private:
                 }
             }, lit->value);
         }
+        else if(auto* ptr = dynamic_cast<pointerNode*>(expr)){
+            variableData& vDat = ptr->targetData;
+            if(logs) emit("; pointer value reading");
+            emit("mov rax, [rbp - " + str(vDat.address) + "]");
+            emit("lea " + abstr::getRegister(vDat) + ", [rax]");
+        }
+        else if(auto* ref = dynamic_cast<referenceNode*>(expr)){
+            if(logs) emit("; stack reference node");
+            emit("mov rax, [rbp - " + str(ref->targetData.address)+"]");
+        }
         else if (auto* id = dynamic_cast<identifyerNode*>(expr)) {
             print("    identifyer node");
             if(id->resolvedType.address == 0) {throw std::runtime_error("codegen: non existant address for identifyer node in expression :" + id->name);}
 
-            emit(abstr::mov(id->resolvedType, abstr::getRegister(id->resolvedType, true), "[rbp - " + str(id->resolvedType.address) + "]"));
+            if(id->resolvedType.isReference){
+                emit("mov rax, [rbp - " + str(id->resolvedType.address) + "]");
+                emit(abstr::mov(id->resolvedType, abstr::getRegister(id->resolvedType, true), "[rax]"));
+            }
+            else{
+                emit(abstr::mov(id->resolvedType, abstr::getRegister(id->resolvedType, true), "[rbp - " + str(id->resolvedType.address) + "]"));
+            }
         }
         else if (auto* bin = dynamic_cast<binaryExpresssionNode*>(expr)) {
             print("    binary node");
@@ -335,10 +381,7 @@ private:
         else if(auto* call = dynamic_cast<methodNode*>(expr)){
             print("    method (call) node");
             // get parameter
-            for(int i = call->parameters.size()-1; i >= 0 ; i--){
-                generateExpression(call->parameters[i].get(), true);
-                emit("push rax");
-            }
+            methodArgs(call->name, call->parameters);
             // call
             emit("call _" + call->name);
             // clean up
@@ -408,13 +451,7 @@ private:
     static void generateMethodCall(methodCallNode* call){
         // parameter injection into the called method's stack (before it exists?!)
         // +32 because of per-method shadow space (windows i love you)
-        for(int i = call->parameters.size()-1; i >= 0 ; i--){
-            // expression
-            emit("; expression for parameter: " + str(i));
-            generateExpression(call->parameters[i].get(), true);
-            emit("; injection for parameter: " + str(i));
-            emit("push rax");
-        }
+        methodArgs(call->methodName, call->parameters);
         
 
         // calling
@@ -479,6 +516,8 @@ private:
         }
     }
 public:
+    static inline std::unordered_map<std::string, methodData> mData;
+
     static std::string generate(std::vector<std::unique_ptr<node>>& nodes, std::unordered_map<std::string, methodData>& _methodData, bool log = false){
         header.clear();
         data_.clear();
