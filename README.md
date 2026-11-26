@@ -1,4 +1,4 @@
-# JarvisScript
+# Jarvis Compiler
 ## About the compiler
 * Compiles 'Jarvis' programming language into 86x_64 NASM fully AOT (Ahead of time)
 * Can output just the executable or the compiled assembly along with the execuatable
