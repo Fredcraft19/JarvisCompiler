@@ -81,6 +81,8 @@ private:
     static void generateVarReassignment(variableResNode* res){
         emit("; " + res->name + " reassignment expression");
         
+        
+
         generateExpression(res->expression.get(), true);
         // the efficiency is.. amazing..
         // (std::string cmd = float ? "movss" : "mov")
@@ -88,7 +90,21 @@ private:
 
         emit("; " + res->name + " reassign to stack");
 
-        if(res->type.isReference){
+        if(res->pointing_to_value){
+            std::string caster = abstr::getResize(res->expression->resolvedType, res->type, res->type.dataType);
+            if(caster.length() > 0) emit(caster);
+
+            if(logs) emit("; load pointer, store through it");
+            emit("mov rcx, qword [rbp - " + str(res->type.address) + "]");
+
+            if(res->type.dataType == variableType::Float){
+                emit("movss " + abstr::getDataType(res->type.totalBytes) + " [rcx], " + abstr::getRegister(res->type));
+            }
+            else{
+                emit("mov " + abstr::getDataType(res->type.totalBytes) + " [rcx], " + abstr::getRegister(res->type));
+            }
+        }
+        else if(res->type.isReference){
             emit("mov rdx, [rbp - " + str(res->type.address) + "]");
             emit(std::string(res->type.dataType == variableType::Float ? "movss" : "mov") + " [rdx], " + abstr::getRegister(res->type, true));
         }
@@ -113,6 +129,13 @@ private:
             else{
                 emit( abstr::identifyerAddress( dynamic_cast<identifyerNode*> ( node->expression.get() ) ) );
             }
+            emit("mov qword [rbp - " + str(node->type.address) + "], rax");
+            return;
+        }
+
+        if(node->type.isPointer){
+            if(logs) emit("; " + node->name + "'s expression");
+            generateExpression(node->expression.get(), true);
             emit("mov qword [rbp - " + str(node->type.address) + "], rax");
             return;
         }
@@ -316,8 +339,8 @@ private:
         else if(auto* ptr = dynamic_cast<pointerNode*>(expr)){
             variableData& vDat = ptr->targetData;
             if(logs) emit("; pointer value reading");
-            emit("mov rax, [rbp - " + str(vDat.address) + "]");
-            emit("lea " + abstr::getRegister(vDat) + ", [rax]");
+            emit("mov rax, qword [rbp - " + str(vDat.address) + "]");
+            emit(abstr::mov(ptr->resolvedType, abstr::getRegister(ptr->resolvedType, true), "[rax]"));
         }
         else if(auto* ref = dynamic_cast<referenceNode*>(expr)){
             if(logs) emit("; stack reference node");
@@ -385,7 +408,10 @@ private:
             // call
             emit("call _" + call->name);
             // clean up
-            emit("add rsp, " + str(call->parameters.size() * 8));
+            if (call->parameters.size() != 0) emit("add rsp, " + str(call->parameters.size() * 8));
+        }
+        else if(auto* n = dynamic_cast<newNode*>(expr)){
+            generateNew(n);
         }
         else {
             throw std::runtime_error("codegen: unknown expression node type");
@@ -458,7 +484,7 @@ private:
         emit("call _" + call->methodName);
 
         // clean up
-        emit("add rsp, " + str(call->parameters.size() * 8));
+        if( call->parameters.size() != 0) emit("add rsp, " + str(call->parameters.size() * 8));
         
     }
 
@@ -483,6 +509,33 @@ private:
         emit("");
 
         emit(methods);  
+    }
+
+    static void generateNew(newNode* n){
+        if(n->isArray){
+            if(logs) emit("; new heap array pointer");
+            generateExpression(n->expr.get(), true);
+            emit("mov ecx, eax");
+            emit("imul ecx, " + str(n->type.totalBytes));
+            emit("call malloc");
+        }
+        else{
+            if(logs) emit("; new heap pointer");
+            emit("mov ecx, " + str(n->type.totalBytes));
+            emit("call malloc");
+            emit("push rax");
+            generateExpression(n->expr.get(), true);
+
+            std::string caster = abstr::getResize(n->expr->resolvedType, n->type, n->type.dataType);
+            if(caster.length() > 0) emit(caster);
+
+            emit("pop rcx");
+            emit("mov " + abstr::getDataType(n->type.totalBytes) + " [rcx], " + abstr::getRegister(n->type));
+            emit("mov rax, rcx");
+        }
+    }
+    static void generateDelete(deleteNode* d){
+
     }
 
     static void generateNode(node* node){
@@ -515,6 +568,12 @@ private:
         }
         else if (auto* ignore_this = dynamic_cast<ignoreNode*>(node)){
             // ignore
+        }
+        else if(auto* n = dynamic_cast<newNode*>(node)){
+            generateNew(n);
+        }
+        else if(auto* d = dynamic_cast<deleteNode*>(node)){
+            generateDelete(d);
         }
         else{
             throw std::runtime_error("codegen: unexpected node to be generated");

@@ -125,6 +125,14 @@ private:
                     }
                 }
             }
+            case tokenType::keyword:{
+                if(tok.value == "new"){
+                    return parseNew();
+                }
+                else {
+                    throw std::runtime_error("line " + std::to_string(peek().line) + "| unexpected keywork in expression");
+                }
+            }
             default:
                 throw std::runtime_error("line " + std::to_string(tok.line) + "| unknown tokentype and unsupported case to parse as primary :" + peek().string());
         }
@@ -454,12 +462,58 @@ private:
         return std::make_unique<ignoreNode>();
     }
 
+    static std::unique_ptr<expressionNode> parseNew(){
+        auto n = std::make_unique<newNode>();
+
+        if(!check(tokenType::type) && !check(tokenType::identifyer)) throw std::runtime_error("line " + std::to_string(peek().line) + "| expected a type after 'new' instead of: " + peek().string());
+        std::string t = peek().value;
+
+        if(data::primatives.find(t) != data::primatives.end()){
+            n->type = data::primatives[t];
+        }
+        else if(data::objects.find(t) != data::objects.end()){
+            throw std::runtime_error("line " + std::to_string(peek().line) + "| custom types not supported for 'new'");
+        } 
+        else{
+            throw std::runtime_error("line " + std::to_string(peek().line) + "| type not found as primative or custom object for 'new'");
+        }
+
+        advance();
+        
+        // i know theres a better way without the if's but still it works right? (: 
+        // it hurts to see me repeat advance and n->expr.. oh well
+        if(check(tokenType::open_bracket)){
+            advance();
+            n->expr = parseExpression();
+            if(!check(tokenType::close_bracket)) throw std::runtime_error("line " + std::to_string(peek().line) + "| expected a ')' to close array size");
+            advance(); // )
+        }
+        else if(check(tokenType::open_square)){
+            advance();
+            n->expr = parseExpression();
+            n->isArray = true;
+            if(!check(tokenType::close_square)) throw std::runtime_error("line " + std::to_string(peek().line) + "| expected a ']' to close array size");
+            advance (); // ]
+        }
+        else{
+            throw std::runtime_error("line " + std::to_string(peek().line) + "| invalid token after type in 'new'. Expected either a '[' or '('");
+        }
+
+        return n;
+    }
+
+    static std::unique_ptr<node> parseDelete(){
+        return std::make_unique<ignoreNode>();
+    }
+
     // hyper overengineered but larp worthy
     static inline std::unordered_map<std::string, std::unique_ptr<node>(*)()> parsableKeywords = {
         {"if", parseIf},
         {"while", parseWhile},
         {"for", parseFor},
         {"return", parseReturn},
+
+        {"delete", parseDelete},
 
         {"__direct", parseDirect},
         {"using", parseUsing}
@@ -507,11 +561,12 @@ private:
         return call;
     }
 
-    static std::unique_ptr<node> parseVariableReassignment(std::string& name, bool needSemi = true){
+    static std::unique_ptr<node> parseVariableReassignment(std::string& name, bool needSemi = true, bool pointing = false){
             std::unique_ptr<variableResNode> reassign = std::make_unique<variableResNode>();
             advance(); // take '='
             reassign->expression = parseExpression();
             reassign->name = name;
+            reassign->pointing_to_value = pointing;
 
             if(needSemi){
                 if(!check(tokenType::semi_colon)) throw std::runtime_error("line " + std::to_string(peek().line) + "| expected a ';' after variable reassignment");
@@ -520,7 +575,7 @@ private:
             return reassign;
         }
 
-        static std::unique_ptr<node> parseShortVariableReassignment(std::string& name, bool needSemi = true){
+        static std::unique_ptr<node> parseShortVariableReassignment(std::string& name, bool needSemi = true, bool pointing = false){
         int line = peek().line;
         std::string oper = advance().value;
         if(oper.length() != 2) {
@@ -531,6 +586,7 @@ private:
         self->name = name;
 
         auto reassign = std::make_unique<variableResNode>();
+        reassign->pointing_to_value = pointing;
 
         if(oper[1] == '='){                       // += -= *= /=
             if(std::string("+-*/").find(oper[0]) == std::string::npos) throw std::runtime_error("line " + std::to_string(line) + "| '" + oper + "' is not a valid short reassignment");
@@ -559,21 +615,39 @@ private:
     }
 
     static std::unique_ptr<node> parseIdentifyerUse(bool needSemi = true){
+        bool pointing = check(tokenType::oper);
+        if(pointing){
+            if(peek().value != "*") throw std::runtime_error("line " + std::to_string(peek().line) + "| unexpected operator token found when parsing -" + peek().string());
+            advance(); // take '*'
+        }
+        
+
         std::string name = advance().value;
 
         if(check(tokenType::open_bracket)){
             return parseMethodCall(name);
         }
         else if(check(tokenType::equals)){
-            return parseVariableReassignment(name, needSemi);
+            return parseVariableReassignment(name, needSemi, pointing);
         }
         else if(check(tokenType::oper)){
-            return parseShortVariableReassignment(name, needSemi);
+            return parseShortVariableReassignment(name, needSemi, pointing);
         }
         else{
             throw std::runtime_error("line " + std::to_string(peek().line) + "| unexpected token after identifyer: " + peek().string());
         }
 
+    }
+
+    static std::unique_ptr<node> parseDerefAssignment(){
+        advance();
+        if(!check(tokenType::identifyer)) throw std::runtime_error("line " + std::to_string(peek().line) + "| expected an identifyer after '*' in assignment");
+        std::string name = advance().value;
+        if(!check(tokenType::equals)) throw std::runtime_error("line " + std::to_string(peek().line) + "| expected '=' after dereferenced pointer");
+
+        auto res = parseVariableReassignment(name, true);
+        static_cast<variableResNode*>(res.get())->pointing_to_value = true;
+        return res;
     }
 
     // determins how to process the tokens,
@@ -582,10 +656,15 @@ private:
         switch(peek().type){
             case tokenType::type:
                 return parseTypeDecl();
+
             case tokenType::identifyer:
                 return parseIdentifyerUse();
             case tokenType::keyword:
                 return parseKeyword();
+
+            case tokenType::oper:
+                return parseDerefAssignment();
+
             default:
                 throw std::runtime_error("line " + std::to_string(peek().line) + "| invalid or unsupported token starting in a statement parser: '" + peek().string() + "'\n");
         }

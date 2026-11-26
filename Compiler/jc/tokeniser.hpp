@@ -72,6 +72,8 @@ public:
         
         lineCount = 1;
 
+        bool inComment = false;
+
         uint32_t qc = 0;
 
         for(int i = 0; i < source.length(); i++){
@@ -79,6 +81,13 @@ public:
 
             if(qc % 2 != 0 && ch != '"'){
                 word += ch;
+                continue;
+            }
+
+            if(ch == '/' && i + 1 < source.length() && source[i+1] == '/'){
+                flush();
+
+                while(i + 1 < source.length() && source[i+1] != '\n') i++;
                 continue;
             }
 
@@ -160,6 +169,15 @@ public:
                 case '}':
                     flush();
                     add(tokenType::close_curly, std::string(1, ch));
+                    break;
+
+                case '[':
+                    flush();
+                    add(tokenType::open_square, std::string(1, ch));
+                    break;
+                case ']':
+                    flush();
+                    add(tokenType::close_square, std::string(1, ch));
                     break;
 
 

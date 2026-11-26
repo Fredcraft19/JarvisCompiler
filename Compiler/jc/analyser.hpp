@@ -121,12 +121,12 @@ private:
         }
         else if(auto* ptr = dynamic_cast<pointerNode*>(node)){
             if(!checkInScope(ptr->target)) throw std::runtime_error("analyser: variable '"+ ptr->target+"' does not exist in scope for primary (ptrN) analysis");
-            auto pointee = findInScope(ptr->target);
+            auto pointer = findInScope(ptr->target);
             variableData dat;
-            dat.dataType = pointee.pointeeType;
-            dat.totalBytes = pointee.pointeeBytes;
+            dat.dataType = pointer.pointeeType;
+            dat.totalBytes = pointer.pointeeBytes;
             ptr->resolvedType = dat;
-            ptr->targetData = pointee;
+            ptr->targetData = pointer;
             return ptr->resolvedType;
         }
         else if(auto* ref = dynamic_cast<referenceNode*>(node)){
@@ -137,8 +137,16 @@ private:
             ref->targetData = target_Data;
             return ref->resolvedType;
         }
+        else if(auto * n = dynamic_cast<newNode*>(node)){
+            analyseNew(n);
+            n->resolvedType = variableData(8, variableType::Pointer);
+            n->resolvedType.isPointer = true;
+            n->resolvedType.pointeeBytes = n->type.totalBytes;
+            n->resolvedType.pointeeType = n->type.dataType;
+            return n->resolvedType;
+        }
 
-        throw std::runtime_error("analyser: unknown primary 'expression' was attempted to be analysed");
+        throw std::runtime_error("analyser: unknown primary expression was attempted to be analysed");
     }
 
     static variableData analyseExpression(std::unique_ptr<expressionNode>& expr, bool expectUnsigned = false){
@@ -149,7 +157,7 @@ private:
             variableData rightType = analyseExpression(bin->right, expectUnsigned);
 
             if(leftType.dataType != rightType.dataType){
-                throw std::runtime_error("analyser: type mismatch in binary expression");
+                throw std::runtime_error("analyser: type mismatch in binary expression\nleft: -type '" + std::to_string(leftType.dataType) + "' -size '" + std::to_string(leftType.totalBytes) + "'\nright: -type '" + std::to_string(rightType.dataType) + "' -size '" + std::to_string(rightType.totalBytes) + "'");
             }
 
             if(leftType.dataType == variableType::Int && expectUnsigned){
@@ -192,6 +200,15 @@ private:
     static void analyseVarRes(variableResNode* res){
         if(!checkInScope(res->name)) throw std::runtime_error("analyser: variable '" + res->name + "' does not exist in scope for variable reassignment");
         auto dat = findInScope(res->name);
+
+        if(res->pointing_to_value){
+            variableData target(dat.pointeeBytes, dat.pointeeType);
+            target.address = dat.address;
+            
+            dat = target;
+
+            res->type = dat;
+        }
 
         if(res->expression->resolvedType.totalBytes == -1){
             res->expression->resolvedType = dat;
@@ -310,8 +327,11 @@ private:
         for(auto& parem : call->parameters){
             analyseExpression(parem);
         }
-
+        
+        if((call->parameters.size() != method.paremeters.size())) throw std::runtime_error("analyser: caller has missing parameters for method '" + method.name + "' (not enough parameters). method expects: " + std::to_string(method.paremeters.size()) + " but was called with " + std::to_string(call->parameters.size()) );
+        
         for(int i = 0; i < method.paremeters.size(); i++){
+            
             auto& methodParemData = method.paremeters[i].typeData;
             auto& callerParemData = call->parameters[i]->resolvedType;
 
@@ -319,6 +339,26 @@ private:
                 throw std::runtime_error("analyser: mis-matched types for method declared parameter data type and caller paremeter data type");
             }
         }
+    }
+
+    static void analyseNew(newNode* n){
+        analyseExpression(n->expr);
+        auto& res = n->expr->resolvedType;
+
+        if(n->isArray){
+            if(res.dataType != variableType::Int && res.dataType != variableType::Uint){
+                throw std::runtime_error("analyser: expected an integer type for array size");
+            }
+        }
+        else{
+            if(res.dataType != n->type.dataType || res.totalBytes > n->type.totalBytes){
+                throw std::runtime_error("analyser: mis-matched type with 'new X(Y)'");
+            }
+        }
+    }
+
+    static void analyseDelete(deleteNode* d){
+
     }
 
     static void analyseNode(node* node){
@@ -351,6 +391,9 @@ private:
         }
         else if(auto* ignore = dynamic_cast <ignoreNode*>(node)){
 
+        }
+        else if(auto* d = dynamic_cast<deleteNode*>(node)){
+            analyseDelete(d);
         }
         else{
             throw std::runtime_error("analyser: unexpected node to be analysed");

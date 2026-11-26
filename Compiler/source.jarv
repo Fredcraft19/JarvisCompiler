@@ -2,18 +2,21 @@
 using "print.jarv"
 using "math.jarv"
 
-void shift(int& ref){
-    ref+= 5;
+void sqr(int& ref){
+    ref *= ref;
 }
 
 int main(){
-    int x = 10;
-    shift(x);
-    x++;
+    int a = 10;
     print();
-    pow(x);
-    print();
-    return x;
+
+    // when in doubt, make a memroy leak i guess
+    
+    while(true){
+        int64* ram = new int64[99];
+    } 
+
+    return 0;
 }
 
 

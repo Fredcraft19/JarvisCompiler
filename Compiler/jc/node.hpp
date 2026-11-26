@@ -109,6 +109,8 @@ struct variableResNode : public node{
     std::string name;
     std::unique_ptr<expressionNode> expression;
     variableData type;
+
+    bool pointing_to_value = false;
 };
 
 struct ifNode : public node {
@@ -154,6 +156,21 @@ struct methodCallNode : public node{
     std::vector<std::unique_ptr<expressionNode>> parameters;
 };
 
+
+struct newNode : public expressionNode{
+    variableData type;
+
+    bool isArray = false;
+
+    std::unique_ptr<expressionNode> expr; // either for [HERE] or (HERE)
+};
+
+struct deleteNode : public node{
+    std::string target;
+    bool isArray;
+
+    variableData type;
+};
 
 
 struct directNode : public node{

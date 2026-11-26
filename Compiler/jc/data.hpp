@@ -95,16 +95,29 @@ struct methodData{
 
 class data{
 public:
+    static inline variableData pointer;
+    
+    static variableData& getTemplatePointer(){
+        pointer.dataType=  Pointer;
+        pointer.totalBytes = 8;
+        return pointer;
+    }
 
     static inline std::vector<std::string> keywords = {
+        // logic
         "if",
         "else",
         "while",
         "for",
 
+        // method 
         "return",
 
+        // pointer fun
+        "new",
+        "delete",
 
+        // compiler special keywords/commands
         "__direct", // direct assembly writing bypassing any analysing
         "using" // like C++ 'include' but unique because its desperate to be unique
     };

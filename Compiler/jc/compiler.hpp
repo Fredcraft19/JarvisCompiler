@@ -18,7 +18,7 @@ private:
         std::string source = "";
         std::string line;
         while(std::getline(file, line)){
-            source += line;
+            source += line + "\n";
         }
         return source;
     }
