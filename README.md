@@ -2,7 +2,7 @@
 ## Project
 * All actual compilation files are found in Compiler/jc
 * Code I last tested is in 'source.jarv'
-* The compiled assembly from the code should be in output.nasm' but i might forget to update this
+* The compiled assembly from the code should be in 'output.nasm' but i might forget to update this
 ## Features
 * Variable Declaration
 * Variable Reassignment
