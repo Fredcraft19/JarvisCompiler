@@ -105,7 +105,8 @@ public:
         "return",
 
 
-        "__direct" // direct assembly writing bypassing any analysing
+        "__direct", // direct assembly writing bypassing any analysing
+        "using" // like C++ 'include' but unique because its desperate to be unique
     };
 
     static inline std::vector<std::string> boolOperators = {

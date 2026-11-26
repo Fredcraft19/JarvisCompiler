@@ -1,10 +1,6 @@
 
-
-void print(){
-    __direct("lea rcx, [rel ifmt]");
-    __direct("mov edx, eax");
-    __direct("call printf");
-}
+using "print.jarv"
+using "math.jarv"
 
 void shift(int& ref){
     ref+= 5;
@@ -14,7 +10,12 @@ int main(){
     int x = 10;
     shift(x);
     x++;
+    print();
+    pow(x);
+    print();
     return x;
 }
+
+
 
 

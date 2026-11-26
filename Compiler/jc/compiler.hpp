@@ -46,7 +46,7 @@ public:
         auto t0 = clock::now();
 
         if(log) std::cout << "Tokenising\n";
-        auto tokens = tok::tokenise(source, log);
+        auto tokens = tok::tokenise(source, log, true);
         auto t1 = clock::now();
 
         if(log){ for(size_t i = 0; i < tokens.size(); i++){

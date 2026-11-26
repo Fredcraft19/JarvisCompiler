@@ -66,7 +66,7 @@ public:
     }
 
     // tokenises source code into tokens for the parser
-    static std::vector<token> tokenise(std::string& source, bool log = false){
+    static std::vector<token> tokenise(std::string& source, bool log = false, bool generateEnd = true){
         toks.clear();
         word = "";
         
@@ -169,7 +169,9 @@ public:
             }
         }
 
-        add(tokenType::end);
+        if(generateEnd) {
+            add(tokenType::end);
+        }
 
         return toks;
     }

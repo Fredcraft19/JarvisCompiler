@@ -475,7 +475,9 @@ private:
         data (R"(ffmt db "float: %f", 10, 0)");
 
         emit("\nsection .text");
-        emit("    extern printf\n");
+        emit("    extern printf");
+        emit("    extern malloc");
+        emit("    extern free\n");
         emit("    global main");
 
         emit("");
@@ -510,6 +512,9 @@ private:
         }
         else if(auto* dir = dynamic_cast<directNode*>(node)){
             emit(dir->direct_asm);  // super hard!
+        }
+        else if (auto* ignore_this = dynamic_cast<ignoreNode*>(node)){
+            // ignore
         }
         else{
             throw std::runtime_error("codegen: unexpected node to be generated");

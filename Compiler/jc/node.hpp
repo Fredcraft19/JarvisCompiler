@@ -156,7 +156,19 @@ struct methodCallNode : public node{
 
 
 
-
 struct directNode : public node{
     std::string direct_asm;
+};
+
+struct usingNode : public node{
+    std::string name;
+    bool isStd;
+
+    usingNode(){
+        isStd = false;
+    }
+};
+
+struct ignoreNode : public node{
+    // ignored by analyser and codegen
 };

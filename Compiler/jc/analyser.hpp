@@ -349,6 +349,9 @@ private:
         else if(auto* direct = dynamic_cast<directNode*>(node)){
             // ignore because '__direct' isnt analysed
         }
+        else if(auto* ignore = dynamic_cast <ignoreNode*>(node)){
+
+        }
         else{
             throw std::runtime_error("analyser: unexpected node to be analysed");
         }
@@ -397,3 +400,5 @@ public:
         return methods_for_codegen;
     }
 };
+
+

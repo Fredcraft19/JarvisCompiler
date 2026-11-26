@@ -7,6 +7,7 @@
 #include <unordered_map>
 #include <string>
 #include <stdexcept>
+#include <fstream>
 
 #include <cstdint>
 
@@ -432,6 +433,27 @@ private:
         return dir;  
     }
 
+    static std::unique_ptr<node> parseUsing(){
+        advance();
+        if(!check(tokenType::string)) throw std::runtime_error("line " + std::to_string(peek().line) + "| expected a string after 'using' for the file name");
+        std::string fileName = peek().value;
+        auto u = std::make_unique<usingNode>();
+        advance(); // tskae string file anme token
+
+        u->isStd = fileName.size() >= 5 && fileName.compare(fileName.size() - 5, 5, ".jarv") == 0;
+        
+        std::ifstream file(fileName);
+        std::string source = "";
+        std::string line;
+        while(std::getline(file, line)){
+            source += line;
+        }
+
+        std::vector<token> includedTokens = tok::tokenise(source, false, false);
+        tokens->insert(tokens->begin() + count, includedTokens.begin(), includedTokens.end());
+        return std::make_unique<ignoreNode>();
+    }
+
     // hyper overengineered but larp worthy
     static inline std::unordered_map<std::string, std::unique_ptr<node>(*)()> parsableKeywords = {
         {"if", parseIf},
@@ -439,7 +461,8 @@ private:
         {"for", parseFor},
         {"return", parseReturn},
 
-        {"__direct", parseDirect}
+        {"__direct", parseDirect},
+        {"using", parseUsing}
     };
 
     static std::unique_ptr<node> parseKeyword(){
