@@ -1,4 +1,9 @@
 # JarvisScript
+## About the compiler
+* Compiles 'Jarvis' programming language into 86x_64 NASM fully AOT (Ahead of time)
+* Can output just the executable or the compiled assembly along with the execuatable
+* It only properly supports Windows NASM output. I don't know if it works on any other operating system (most likely not), however I do plan on making it compile for Linux aswell
+
 ## Project
 * All actual compilation files are found in Compiler/jc
 * Code I last tested is in 'source.jarv'
