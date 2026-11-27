@@ -1,0 +1,13 @@
+// debug print 'library'
+
+void print(){
+    __direct("lea rcx, [rel ifmt]");
+    __direct("mov edx, eax");
+    __direct("call printf");
+}
+
+void print_int(int& ref){
+    ref = ref;
+    print();
+}
+

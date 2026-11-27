@@ -408,7 +408,8 @@ private:
             // call
             emit("call _" + call->name);
             // clean up
-            if (call->parameters.size() != 0) emit("add rsp, " + str(call->parameters.size() * 8));
+            int total = (call->parameters.size() * 8 + 15) & ~15;
+            if(total != 0) emit("add rsp, " + str(total));
         }
         else if(auto* n = dynamic_cast<newNode*>(expr)){
             generateNew(n);
@@ -475,16 +476,27 @@ private:
     }
 
     static void generateMethodCall(methodCallNode* call){
+
+        int parameterBytes = call->parameters.size() * 8;
+
+        // padding for the rounded to nearest 16 add rsp (at the bottom of generateMethodCall)
+        // if the actaul size isnt a multiple of 16, this is ran to put it into a multiple of 16
+        if(parameterBytes % 16 != 0){
+            emit("sub rsp, 8");
+        }
+
         // parameter injection into the called method's stack (before it exists?!)
         // +32 because of per-method shadow space (windows i love you)
         methodArgs(call->methodName, call->parameters);
+        
         
 
         // calling
         emit("call _" + call->methodName);
 
         // clean up
-        if( call->parameters.size() != 0) emit("add rsp, " + str(call->parameters.size() * 8));
+        int total = (parameterBytes + 15) & ~15;
+        if(total != 0) emit("add rsp, " + str(total));
         
     }
 
@@ -535,7 +547,10 @@ private:
         }
     }
     static void generateDelete(deleteNode* d){
-
+        emit("mov rax, [rbp - " + str(d->type.address) + "]");
+        // rax contains malloc address
+        emit("mov rcx, rax");
+        emit("call free");
     }
 
     static void generateNode(node* node){

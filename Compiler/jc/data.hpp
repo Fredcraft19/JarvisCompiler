@@ -93,6 +93,8 @@ struct methodData{
     }
 };
 
+
+
 class data{
 public:
     static inline variableData pointer;
@@ -178,3 +180,5 @@ public:
 
     static inline std::unordered_map<std::string, objectData> objects = {};
 };
+
+

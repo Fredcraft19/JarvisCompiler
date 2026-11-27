@@ -484,8 +484,15 @@ private:
         // it hurts to see me repeat advance and n->expr.. oh well
         if(check(tokenType::open_bracket)){
             advance();
-            n->expr = parseExpression();
-            if(!check(tokenType::close_bracket)) throw std::runtime_error("line " + std::to_string(peek().line) + "| expected a ')' to close array size");
+
+            if(check(tokenType::close_bracket)){
+                n->expr = std::make_unique<literalNode>(0, n->type);
+            }
+            else{
+                n->expr = parseExpression();
+                if(!check(tokenType::close_bracket)) throw std::runtime_error("line " + std::to_string(peek().line) + "| expected a ')' to close array size");
+            }
+            
             advance(); // )
         }
         else if(check(tokenType::open_square)){
@@ -503,7 +510,27 @@ private:
     }
 
     static std::unique_ptr<node> parseDelete(){
-        return std::make_unique<ignoreNode>();
+        advance(); // take 'delete'
+
+        if(!check(tokenType::open_square) && !check(tokenType::identifyer)) throw std::runtime_error("line " + std::to_string(peek().line) + "| expected an identifyer are [] after 'delete' keyword");
+
+        auto n = std::make_unique<deleteNode>();
+
+        n->isArray = check(tokenType::open_bracket);
+        if(n->isArray){
+            advance();
+            if(!check(tokenType::close_square))  throw std::runtime_error("line " + std::to_string(peek().line) + "| expected a ']' directly after [] for 'delete'");
+            advance();
+        }
+
+        if(!check(tokenType::identifyer)) throw std::runtime_error("line " + std::to_string(peek().line) + "| expected an identifyer for delete instead of token: " + peek().string());
+
+        n->target = peek().value;
+        advance(); // VAR
+        if(!check(tokenType::semi_colon)) throw std::runtime_error("line " + std::to_string(peek().line) + "| expected a ';' after delete statement ");
+        advance(); // ;
+
+        return n;
     }
 
     // hyper overengineered but larp worthy

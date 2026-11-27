@@ -1,20 +1,16 @@
 
 using "print.jarv"
-using "math.jarv"
 
-void sqr(int& ref){
-    ref *= ref;
-}
 
 int main(){
-    int a = 10;
-    print();
 
-    // when in doubt, make a memroy leak i guess
-    
+
     while(true){
-        int64* ram = new int64[99];
-    } 
+        int8* _ = new int8();
+        delete _;
+    }
+    
+
 
     return 0;
 }

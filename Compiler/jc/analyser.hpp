@@ -358,7 +358,16 @@ private:
     }
 
     static void analyseDelete(deleteNode* d){
+        if(!checkInScope(d->target)) throw std::runtime_error("analyser: variable '" + d->target + "' does not exist in scope");
 
+        variableData dat = findInScope(d->target);
+        if(!dat.isPointer) throw std::runtime_error("analyser: 'delete' may only be used on a variable that is a pointer");
+
+        if(d->isArray){
+            throw std::runtime_error("analyser: maybe add extra analasys for pointer arrays to be deleted?");
+        }
+
+        d->type = dat;
     }
 
     static void analyseNode(node* node){
